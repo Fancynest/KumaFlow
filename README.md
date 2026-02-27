@@ -1,8 +1,6 @@
 KumaFlow 🐻💸
 
-KumaFlow is a lightweight, privacy-focused Android application for managing personal cash flow.  
-Built from scratch as my first milestone in Informatics Engineering at Pamulang University.
-
+KumaFlow is a lightweight, privacy-focused Android application for managing personal cash flow. Built entirely offline with no external servers, it is designed simply to get the job done efficiently and securely.
 ---
 
 📱 Key Features
@@ -26,7 +24,7 @@ Built from scratch as my first milestone in Informatics Engineering at Pamulang 
 
 📦 Getting Started
 
-- Version: v1.0.0-beta 
+- Version: v1.0.1 
 - Min SDK: 27 (Android 8.1) 
 
 🚀 For Developers
@@ -37,7 +35,7 @@ Built from scratch as my first milestone in Informatics Engineering at Pamulang 
 ---
 
 👨‍💻 Author
-Gabriel Bernard Informatics Engineering Student
+Gabriel 🐻
 
 📄 License
 This project is for educational and portfolio purposes.
