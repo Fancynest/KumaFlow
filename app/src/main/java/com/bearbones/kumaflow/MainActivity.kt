@@ -34,6 +34,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -47,6 +48,7 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -490,14 +492,43 @@ fun HomeScreen(profile: UserProfile, transactions: List<KumaTransaction>, balanc
                 Text(AppStr.curBal, color = AppText(), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
                 Spacer(modifier = Modifier.height(16.dp))
                 val balPref = if (balance < 0) "- " else ""
-                Text("$balPref$curSym ${NumberFormat.getInstance(locale).format(abs(balance))}", fontSize = 48.sp, fontWeight = FontWeight.Black, color = Color.White)
+
+                // FIX: Pakai AutoSizeText buat Balance
+                AutoSizeText(
+                    text = "$balPref$curSym ${NumberFormat.getInstance(locale).format(abs(balance))}",
+                    modifier = Modifier.fillMaxWidth(),
+                    fontSize = 48.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White,
+                    minimumFallbackSize = 24.sp
+                )
+
                 Spacer(modifier = Modifier.height(32.dp))
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.ArrowUpward, contentDescription = null, tint = AppGreen(), modifier = Modifier.size(20.dp))
-                    Text("${AppStr.inc} $curSym ${NumberFormat.getInstance(locale).format(income)}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.width(16.dp))
+
+                    // FIX: Pakai AutoSizeText buat Income
+                    AutoSizeText(
+                        text = "${AppStr.inc} $curSym ${NumberFormat.getInstance(locale).format(income)}",
+                        modifier = Modifier.weight(1f).padding(start = 4.dp),
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        minimumFallbackSize = 8.sp
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
                     Icon(Icons.Default.ArrowDownward, contentDescription = null, tint = AppRed(), modifier = Modifier.size(20.dp))
-                    Text("${AppStr.exp} $curSym ${NumberFormat.getInstance(locale).format(expenses)}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+
+                    // FIX: Pakai AutoSizeText buat Expenses
+                    AutoSizeText(
+                        text = "${AppStr.exp} $curSym ${NumberFormat.getInstance(locale).format(expenses)}",
+                        modifier = Modifier.weight(1f).padding(start = 4.dp),
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        minimumFallbackSize = 8.sp
+                    )
                 }
             }
         }
@@ -525,12 +556,22 @@ fun ReportScreen(profile: UserProfile, allTransactions: List<KumaTransaction>, i
         Spacer(modifier = Modifier.height(24.dp))
         Card(modifier = Modifier.fillMaxWidth().height(185.dp), shape = RoundedCornerShape(32.dp), colors = CardDefaults.cardColors(containerColor = AppSurface())) {
             Row(modifier = Modifier.padding(24.dp).fillMaxSize(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                     Text(AppStr.sum, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
                     Spacer(modifier = Modifier.height(12.dp)); Text(AppStr.net, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                    val balPref = if (balance < 0) "- " else "+"; Text("$curSym $balPref${NumberFormat.getInstance(locale).format(abs(balance))}", fontSize = 22.sp, fontWeight = FontWeight.Black, color = Color.White)
+                    val balPref = if (balance < 0) "- " else "+";
+
+                    // FIX: Pakai AutoSizeText buat Net Savings
+                    AutoSizeText(
+                        text = "$curSym $balPref${NumberFormat.getInstance(locale).format(abs(balance))}",
+                        modifier = Modifier.fillMaxWidth(),
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Black,
+                        color = Color.White,
+                        minimumFallbackSize = 14.sp
+                    )
                 }
-                Column(horizontalAlignment = Alignment.End) {
+                Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
                     IncomeExpensePill(AppStr.inc, "$curSym ${NumberFormat.getInstance(locale).format(income)}", AppGreen(), true)
                     Spacer(modifier = Modifier.height(12.dp)); IncomeExpensePill(AppStr.exp, "$curSym ${NumberFormat.getInstance(locale).format(expenses)}", AppRed(), false)
                 }
@@ -812,6 +853,40 @@ fun SettingsScreen(currentProfile: UserProfile, transactionList: List<KumaTransa
 
 // --- 6. SHARED COMPONENTS ---
 
+// FIX: Komponen pintar buat Auto-Size Text
+@Composable
+fun AutoSizeText(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
+    fontSize: TextUnit = TextUnit.Unspecified,
+    fontWeight: FontWeight? = null,
+    maxLines: Int = 1,
+    minimumFallbackSize: TextUnit = 12.sp
+) {
+    var scaledTextStyle by remember { mutableStateOf(androidx.compose.ui.text.TextStyle(fontSize = fontSize)) }
+    var readyToDraw by remember { mutableStateOf(false) }
+
+    Text(
+        text = text,
+        modifier = modifier.drawWithContent {
+            if (readyToDraw) drawContent()
+        },
+        color = color,
+        fontSize = scaledTextStyle.fontSize,
+        fontWeight = fontWeight,
+        maxLines = maxLines,
+        softWrap = false,
+        onTextLayout = { textLayoutResult ->
+            if (textLayoutResult.hasVisualOverflow && scaledTextStyle.fontSize > minimumFallbackSize) {
+                scaledTextStyle = scaledTextStyle.copy(fontSize = scaledTextStyle.fontSize * 0.9f)
+            } else {
+                readyToDraw = true
+            }
+        }
+    )
+}
+
 class ThousandSeparatorTransformation : VisualTransformation {
     override fun filter(text: AnnotatedString): TransformedText {
         val originalText = text.text
@@ -1027,7 +1102,15 @@ fun IncomeExpensePill(label: String, amount: String, color: Color, isUp: Boolean
             Icon(imageVector = if (isUp) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward, tint = color, contentDescription = null, modifier = Modifier.size(12.dp))
             Text(" $label", color = color, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
         }
-        Text(amount, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+
+        // FIX: Pakai AutoSizeText buat di dalem Pill
+        AutoSizeText(
+            text = amount,
+            color = Color.White,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            minimumFallbackSize = 8.sp
+        )
     }
 }
 
@@ -1070,7 +1153,15 @@ fun TransactionItem(profile: UserProfile, trans: KumaTransaction) {
                 Text(trans.date, color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
             }
             val formatted = try { NumberFormat.getInstance(Locale.forLanguageTag("id-ID")).format(trans.amount.toLong()) } catch (_: Exception) { trans.amount }
-            Text("${if (trans.isIncome) "+ " else "- "} $curSym $formatted", color = if (trans.isIncome) Color.White else AppText(), fontWeight = FontWeight.Bold)
+
+            // FIX: Buat item list juga dibikin AutoSize biar aman kalau ada yang nabung 1 Triliun
+            AutoSizeText(
+                text = "${if (trans.isIncome) "+ " else "- "} $curSym $formatted",
+                color = if (trans.isIncome) Color.White else AppText(),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.widthIn(max = 120.dp),
+                minimumFallbackSize = 10.sp
+            )
         }
     }
 }
