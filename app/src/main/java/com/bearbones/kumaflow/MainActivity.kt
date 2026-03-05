@@ -16,6 +16,7 @@ import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +50,7 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -92,7 +95,7 @@ object AppStr {
     val noTrendData get() = if(isId) "Belum ada data bulanan" else "No monthly data yet"
     val set get() = if(isId) "Pengaturan" else "Settings"
     val accSec get() = if(isId) "Akun & Keamanan" else "Account & Security"
-    val editProf get() = if(isId) "Edit Profil" else "Edit Profile"
+    val editProf get() = if(isId) "Edit Nama" else "Edit Name"
     val appLck get() = if(isId) "Kunci Aplikasi" else "App Lock"
     val finPref get() = if(isId) "Preferensi Keuangan" else "Financial Preference"
     val cur get() = if(isId) "Mata Uang" else "Currency"
@@ -128,6 +131,7 @@ object AppStr {
     val agree get() = if(isId) "Setuju" else "Agree"
     val home get() = if(isId) "Beranda" else "Home"
     val addTx get() = if(isId) "Tambah Transaksi" else "Add New Transaction"
+    val editTx get() = if(isId) "Edit Transaksi" else "Edit Transaction"
     val cat get() = if(isId) "Kategori" else "Category"
     val nme get() = if(isId) "Nama" else "Name"
     val msgInp get() = if(isId) "Pesan / Catatan" else "Message / Notes"
@@ -146,6 +150,17 @@ object AppStr {
     val saveBak get() = if(isId) "Simpan File Backup (.kuma)" else "Save Backup File (.kuma)"
     val failBak get() = if(isId) "Gagal membackup aplikasi" else "Failed to backup app"
     val noFileMgr get() = if(isId) "Aplikasi File Manager tidak ditemukan" else "File Manager app not found"
+
+    // Theme & Edit Strings
+    val theme get() = if(isId) "Tema Tampilan" else "App Theme"
+    val themeSys get() = if(isId) "Ikuti Sistem" else "Use System Setting"
+    val themeDark get() = if(isId) "Mode Gelap" else "Dark Mode"
+    val themeLight get() = if(isId) "Mode Terang" else "Light Mode"
+    val edit get() = if(isId) "Edit" else "Edit"
+    val delete get() = if(isId) "Hapus" else "Delete"
+    val delConf get() = if(isId) "Yakin hapus transaksi ini?" else "Delete this transaction?"
+    val yes get() = if(isId) "Ya, Hapus" else "Yes, Delete"
+    val no get() = if(isId) "Batal" else "Cancel"
 }
 
 // --- 0. THEME ENGINE ---
@@ -176,7 +191,7 @@ data class UserProfile(
     val currency: String = "IDR",
     val dateFormat: String = "dd MMM yyyy",
     val monthlyTarget: Long = 0L,
-    val isDarkMode: Boolean = true
+    val themeMode: Int = 0 // FIX: 0=System, 1=Light, 2=Dark
 )
 
 @Dao
@@ -186,6 +201,12 @@ interface TransactionDao {
 
     @Insert
     suspend fun insertTransaction(transaction: KumaTransaction)
+
+    @Update
+    suspend fun updateTransaction(transaction: KumaTransaction)
+
+    @Delete
+    suspend fun deleteTransaction(transaction: KumaTransaction)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransactions(transactions: List<KumaTransaction>)
@@ -200,7 +221,7 @@ interface TransactionDao {
     suspend fun clearTransactions()
 }
 
-@Database(entities = [KumaTransaction::class, UserProfile::class], version = 6, exportSchema = false)
+@Database(entities = [KumaTransaction::class, UserProfile::class], version = 7, exportSchema = false)
 abstract class KumaDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     companion object {
@@ -244,7 +265,8 @@ fun LockScreen(correctPin: String, activity: FragmentActivity, onSuccess: () -> 
     val context = LocalContext.current
     LaunchedEffect(Unit) { showBiometricPrompt(activity, onSuccess, {}) }
 
-    Column(modifier = Modifier.fillMaxSize().background(AppBg()).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+    Column(modifier = Modifier.fillMaxSize().background(AppBg()).verticalScroll(rememberScrollState()).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Spacer(modifier = Modifier.height(32.dp))
         Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(64.dp), tint = AppText())
         Spacer(modifier = Modifier.height(16.dp))
         Text(AppStr.appLocked, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = AppText())
@@ -284,24 +306,21 @@ fun LockScreen(correctPin: String, activity: FragmentActivity, onSuccess: () -> 
                 }
             }
         }
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
-// --- 4. MAIN ACTIVITY (DILENGKAPI NATIVE FILE PICKER UNTUK BYPASS BUG 16-BIT) ---
+// --- 4. MAIN ACTIVITY ---
 class MainActivity : FragmentActivity() {
 
-    // Variabel penampung string JSON yang dibaca langsung secara sinkron
     var pendingRestoreJson: String? = null
 
-    // Override fungsi jadul Android buat nangkap hasil File Manager dengan aman
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        // 12345 adalah angka aman, jauh di bawah batas 65535 (16-bit)
         if (requestCode == 12345 && resultCode == Activity.RESULT_OK) {
             val uri = data?.data
             if (uri != null) {
                 try {
-                    // FIX: Baca isi file SECARA SINKRON di Main Thread sebelum URI Expired
                     contentResolver.openInputStream(uri)?.use { stream ->
                         pendingRestoreJson = stream.bufferedReader().readText()
                     }
@@ -315,7 +334,6 @@ class MainActivity : FragmentActivity() {
         }
     }
 
-    // Fungsi trigger File Manager murni (bukan lewat Jetpack Compose)
     fun openSafeFilePicker() {
         val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
             type = "*/*"
@@ -335,9 +353,15 @@ class MainActivity : FragmentActivity() {
             val db = remember { KumaDatabase.getDatabase(context) }
             val dao = db.transactionDao()
             val userProfile by dao.getUserProfile().collectAsState(initial = null)
-            var isAuthenticated by remember { mutableStateOf(false) }
 
-            val isDark = userProfile?.isDarkMode ?: true
+            var isAuthenticated by rememberSaveable { mutableStateOf(false) }
+
+            val systemDark = isSystemInDarkTheme()
+            val isDark = when(userProfile?.themeMode) {
+                1 -> false
+                2 -> true
+                else -> systemDark
+            }
 
             CompositionLocalProvider(LocalIsDark provides isDark) {
                 val colorScheme = if (isDark) darkColorScheme(
@@ -390,12 +414,13 @@ fun MainScreen(userProfileState: UserProfile?, dao: TransactionDao) {
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showBottomSheet by remember { mutableStateOf(false) }
+    var transactionToEdit by remember { mutableStateOf<KumaTransaction?>(null) }
 
     Scaffold(
         containerColor = AppBg(),
         floatingActionButton = {
             if (selectedItemIndex != 2) {
-                FloatingActionButton(onClick = { showBottomSheet = true }, containerColor = AppPrimary(), contentColor = Color.White, shape = CircleShape, modifier = Modifier.size(70.dp)) {
+                FloatingActionButton(onClick = { transactionToEdit = null; showBottomSheet = true }, containerColor = AppPrimary(), contentColor = Color.White, shape = CircleShape, modifier = Modifier.size(70.dp)) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(40.dp))
                 }
             }
@@ -404,21 +429,31 @@ fun MainScreen(userProfileState: UserProfile?, dao: TransactionDao) {
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
             when (selectedItemIndex) {
-                0 -> HomeScreen(userProfile, recentTransactions, totalBalance, totalIncome, totalExpenses) {
-                    scope.launch { dao.saveProfile(userProfile.copy(isDarkMode = !userProfile.isDarkMode)) }
-                }
+                0 -> HomeScreen(
+                    profile = userProfile,
+                    transactions = recentTransactions,
+                    balance = totalBalance,
+                    income = totalIncome,
+                    expenses = totalExpenses,
+                    onEdit = { t -> transactionToEdit = t; showBottomSheet = true },
+                    onDelete = { t -> scope.launch { dao.deleteTransaction(t) } }
+                )
                 1 -> ReportScreen(userProfile, transactionList, totalIncome, totalExpenses, totalBalance)
                 2 -> SettingsScreen(userProfile, transactionList, dao)
             }
         }
         if (showBottomSheet) {
             ModalBottomSheet(onDismissRequest = { showBottomSheet = false }, sheetState = sheetState, containerColor = AppBg()) {
-                TransactionBottomSheet(onDismiss = { showBottomSheet = false }, onSave = { newTrans ->
-                    scope.launch {
-                        dao.insertTransaction(newTrans)
-                        Toast.makeText(context, AppStr.txSaved, Toast.LENGTH_SHORT).show()
+                TransactionBottomSheet(
+                    transactionToEdit = transactionToEdit,
+                    onDismiss = { showBottomSheet = false },
+                    onSave = { newTrans ->
+                        scope.launch {
+                            if (newTrans.id == 0) dao.insertTransaction(newTrans) else dao.updateTransaction(newTrans)
+                            Toast.makeText(context, AppStr.txSaved, Toast.LENGTH_SHORT).show()
+                        }
                     }
-                })
+                )
             }
         }
     }
@@ -426,17 +461,17 @@ fun MainScreen(userProfileState: UserProfile?, dao: TransactionDao) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TransactionBottomSheet(onDismiss: () -> Unit, onSave: (KumaTransaction) -> Unit) {
-    var isIncome by remember { mutableStateOf(false) }
-    var selectedCategory by remember { mutableStateOf("Food") }
-    var name by remember { mutableStateOf("") }
-    var message by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf("") }
+fun TransactionBottomSheet(transactionToEdit: KumaTransaction?, onDismiss: () -> Unit, onSave: (KumaTransaction) -> Unit) {
+    var isIncome by remember(transactionToEdit) { mutableStateOf(transactionToEdit?.isIncome ?: false) }
+    var selectedCategory by remember(transactionToEdit) { mutableStateOf(transactionToEdit?.category ?: "Food") }
+    var name by remember(transactionToEdit) { mutableStateOf(transactionToEdit?.name ?: "") }
+    var message by remember(transactionToEdit) { mutableStateOf(transactionToEdit?.message ?: "") }
+    var amount by remember(transactionToEdit) { mutableStateOf(transactionToEdit?.amount ?: "") }
     var expanded by remember { mutableStateOf(false) }
     val categories = listOf("Financial", "Food", "Shopping", "Health", "Transport", "Education", "Entertainment", "Others")
 
     Column(modifier = Modifier.fillMaxWidth().imePadding().padding(horizontal = 24.dp).padding(bottom = 32.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(AppStr.addTx, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
+        Text(if (transactionToEdit == null) AppStr.addTx else AppStr.editTx, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
         Spacer(modifier = Modifier.height(24.dp))
         Row(modifier = Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(16.dp)).background(AppSurfaceVariant())) {
             Box(modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(16.dp)).background(if (isIncome) AppGreen() else Color.Transparent).clickable { isIncome = true }, contentAlignment = Alignment.Center) { Text(AppStr.inc, color = if (isIncome) Color.White else AppText(), fontWeight = FontWeight.Bold) }
@@ -466,7 +501,7 @@ fun TransactionBottomSheet(onDismiss: () -> Unit, onSave: (KumaTransaction) -> U
         Spacer(modifier = Modifier.height(30.dp))
         Button(onClick = {
             val now = LocalDateTime.now()
-            onSave(KumaTransaction(name = name, date = now.format(DateTimeFormatter.ofPattern(if(AppStr.isId) "dd MMM yyyy" else "MMM dd, yyyy", Locale.getDefault())), amount = amount, isIncome = isIncome, category = selectedCategory, timestamp = now.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME), message = message))
+            onSave(KumaTransaction(id = transactionToEdit?.id ?: 0, name = name, date = transactionToEdit?.date ?: now.format(DateTimeFormatter.ofPattern(if(AppStr.isId) "dd MMM yyyy" else "MMM dd, yyyy", Locale.getDefault())), amount = amount, isIncome = isIncome, category = selectedCategory, timestamp = transactionToEdit?.timestamp ?: now.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME), message = message))
             onDismiss()
         }, modifier = Modifier.fillMaxWidth().height(55.dp), colors = ButtonDefaults.buttonColors(containerColor = AppPrimary()), shape = RoundedCornerShape(16.dp), enabled = amount.isNotEmpty() && name.isNotEmpty()) {
             Text(AppStr.saveTx, color = Color.White, fontWeight = FontWeight.ExtraBold)
@@ -475,72 +510,74 @@ fun TransactionBottomSheet(onDismiss: () -> Unit, onSave: (KumaTransaction) -> U
 }
 
 @Composable
-fun HomeScreen(profile: UserProfile, transactions: List<KumaTransaction>, balance: Long, income: Long, expenses: Long, onToggleMode: () -> Unit) {
+fun HomeScreen(profile: UserProfile, transactions: List<KumaTransaction>, balance: Long, income: Long, expenses: Long, onEdit: (KumaTransaction) -> Unit, onDelete: (KumaTransaction) -> Unit) {
     val locale = Locale.forLanguageTag("id-ID")
     val curSym = when(profile.currency) { "USD", "AUD", "CAD", "SGD" -> "$"; "EUR" -> "€"; "GBP" -> "£"; "JPY", "CNY" -> "¥"; "CHF" -> "CHF"; else -> "Rp" }
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(top = 24.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(if (AppStr.isId) "Halo, ${profile.userName}!" else "Hello, ${profile.userName}!", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
-            IconButton(onClick = onToggleMode) {
-                Icon(imageVector = if (LocalIsDark.current) Icons.Default.WbSunny else Icons.Default.Brightness3, contentDescription = null, tint = AppText(), modifier = Modifier.size(32.dp))
+    LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(top = 24.dp)) {
+        item {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(if (AppStr.isId) "Halo, ${profile.userName}!" else "Hello, ${profile.userName}!", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
             }
-        }
-        Spacer(modifier = Modifier.height(30.dp))
-        Card(modifier = Modifier.fillMaxWidth().height(250.dp), shape = RoundedCornerShape(32.dp), colors = CardDefaults.cardColors(containerColor = AppSurface())) {
-            Column(modifier = Modifier.padding(32.dp).fillMaxSize(), verticalArrangement = Arrangement.Center) {
-                Text(AppStr.curBal, color = AppText(), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-                Spacer(modifier = Modifier.height(16.dp))
-                val balPref = if (balance < 0) "- " else ""
+            Spacer(modifier = Modifier.height(30.dp))
+            Card(modifier = Modifier.fillMaxWidth().height(250.dp), shape = RoundedCornerShape(32.dp), colors = CardDefaults.cardColors(containerColor = AppSurface())) {
+                Column(modifier = Modifier.padding(32.dp).fillMaxSize(), verticalArrangement = Arrangement.Center) {
+                    Text(AppStr.curBal, color = AppText(), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    val balPref = if (balance < 0) "- " else ""
 
-                // FIX: Pakai AutoSizeText buat Balance
-                AutoSizeText(
-                    text = "$balPref$curSym ${NumberFormat.getInstance(locale).format(abs(balance))}",
-                    modifier = Modifier.fillMaxWidth(),
-                    fontSize = 48.sp,
-                    fontWeight = FontWeight.Black,
-                    color = Color.White,
-                    minimumFallbackSize = 24.sp
-                )
-
-                Spacer(modifier = Modifier.height(32.dp))
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.ArrowUpward, contentDescription = null, tint = AppGreen(), modifier = Modifier.size(20.dp))
-
-                    // FIX: Pakai AutoSizeText buat Income
                     AutoSizeText(
-                        text = "${AppStr.inc} $curSym ${NumberFormat.getInstance(locale).format(income)}",
-                        modifier = Modifier.weight(1f).padding(start = 4.dp),
+                        text = "$balPref$curSym ${NumberFormat.getInstance(locale).format(abs(balance))}",
+                        modifier = Modifier.fillMaxWidth(),
+                        fontSize = 48.sp,
+                        fontWeight = FontWeight.Black,
                         color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        minimumFallbackSize = 8.sp
+                        minimumFallbackSize = 24.sp
                     )
 
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(Icons.Default.ArrowDownward, contentDescription = null, tint = AppRed(), modifier = Modifier.size(20.dp))
-
-                    // FIX: Pakai AutoSizeText buat Expenses
-                    AutoSizeText(
-                        text = "${AppStr.exp} $curSym ${NumberFormat.getInstance(locale).format(expenses)}",
-                        modifier = Modifier.weight(1f).padding(start = 4.dp),
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        minimumFallbackSize = 8.sp
-                    )
+                    Spacer(modifier = Modifier.height(32.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.ArrowUpward, contentDescription = null, tint = AppGreen(), modifier = Modifier.size(20.dp))
+                        AutoSizeText(
+                            text = "${AppStr.inc} $curSym ${NumberFormat.getInstance(locale).format(income)}",
+                            modifier = Modifier.weight(1f).padding(start = 4.dp),
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            minimumFallbackSize = 8.sp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(Icons.Default.ArrowDownward, contentDescription = null, tint = AppRed(), modifier = Modifier.size(20.dp))
+                        AutoSizeText(
+                            text = "${AppStr.exp} $curSym ${NumberFormat.getInstance(locale).format(expenses)}",
+                            modifier = Modifier.weight(1f).padding(start = 4.dp),
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            minimumFallbackSize = 8.sp
+                        )
+                    }
                 }
             }
+            Spacer(modifier = Modifier.height(32.dp))
+            Text(AppStr.recTx, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = AppText())
+            Spacer(modifier = Modifier.height(16.dp))
         }
-        Spacer(modifier = Modifier.height(32.dp))
-        Text(AppStr.recTx, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = AppText())
-        Spacer(modifier = Modifier.height(16.dp))
+
         if (transactions.isEmpty()) {
-            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Text(AppStr.noTx, textAlign = TextAlign.Center, color = AppText().copy(alpha = 0.5f), fontWeight = FontWeight.Bold)
+            item {
+                Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                    Text(AppStr.noTx, textAlign = TextAlign.Center, color = AppText().copy(alpha = 0.5f), fontWeight = FontWeight.Bold)
+                }
+            }
+        } else {
+            items(transactions) {
+                TransactionItem(profile, it, onEdit, onDelete)
+                Spacer(modifier = Modifier.height(14.dp))
             }
         }
-        else { LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) { items(transactions) { TransactionItem(profile, it) } } }
+
+        item { Spacer(modifier = Modifier.height(100.dp)) }
     }
 }
 
@@ -561,7 +598,6 @@ fun ReportScreen(profile: UserProfile, allTransactions: List<KumaTransaction>, i
                     Spacer(modifier = Modifier.height(12.dp)); Text(AppStr.net, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
                     val balPref = if (balance < 0) "- " else "+";
 
-                    // FIX: Pakai AutoSizeText buat Net Savings
                     AutoSizeText(
                         text = "$curSym $balPref${NumberFormat.getInstance(locale).format(abs(balance))}",
                         modifier = Modifier.fillMaxWidth(),
@@ -677,20 +713,23 @@ fun SettingsScreen(currentProfile: UserProfile, transactionList: List<KumaTransa
     var showCurrencyDialog by remember { mutableStateOf(false) }
     var showTargetDialog by remember { mutableStateOf(false) }
     var showDateDialog by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
 
     var pinInput by remember { mutableStateOf("") }
     var targetInput by remember { mutableStateOf(currentProfile.monthlyTarget.toString()) }
     var isTurningOn by remember { mutableStateOf(true) }
     var newName by remember { mutableStateOf(currentProfile.userName) }
 
-    // --- FIX: Logic Restore di-trigger manual ---
-    // Di sini kita cek apakah mainActivity punya pending data (pendingRestoreJson)
     LaunchedEffect(mainActivity?.pendingRestoreJson) {
         val jsonToRestore = mainActivity?.pendingRestoreJson
         if (jsonToRestore != null) {
             scope.launch(Dispatchers.IO) {
                 try {
                     val root = JSONObject(jsonToRestore)
+
+                    // --- BACA KTP VERSI BACKUP (Default 1) ---
+                    val backupVer = root.optInt("backupVersion", 1)
+
                     val pObj = root.getJSONObject("profile")
                     val newProfile = UserProfile(
                         userName = pObj.optString("userName", "User"),
@@ -699,7 +738,7 @@ fun SettingsScreen(currentProfile: UserProfile, transactionList: List<KumaTransa
                         currency = pObj.optString("currency", "IDR"),
                         dateFormat = pObj.optString("dateFormat", "dd MMM yyyy"),
                         monthlyTarget = pObj.optLong("monthlyTarget", 0L),
-                        isDarkMode = pObj.optBoolean("isDarkMode", true)
+                        themeMode = pObj.optInt("themeMode", 0)
                     )
                     dao.saveProfile(newProfile)
 
@@ -730,18 +769,16 @@ fun SettingsScreen(currentProfile: UserProfile, transactionList: List<KumaTransa
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
-                        // INI AKAN NAMPILIN ERROR ASLINYA KALAU GAGAL
                         Toast.makeText(context, "Error Restore: ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 } finally {
-                    // Bersihin state
                     mainActivity.pendingRestoreJson = null
                 }
             }
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(top = 24.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(top = 24.dp).verticalScroll(rememberScrollState())) {
         Text(AppStr.set, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
         Spacer(modifier = Modifier.height(24.dp))
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -749,12 +786,15 @@ fun SettingsScreen(currentProfile: UserProfile, transactionList: List<KumaTransa
                 SettingsGroupCard(
                     title = AppStr.accSec,
                     modifier = Modifier.weight(1f),
-                    items = listOf(AppStr.editProf to Icons.Default.Edit, AppStr.appLck to Icons.Default.Fingerprint),
+                    items = listOf(AppStr.editProf to Icons.Default.Edit, AppStr.theme to Icons.Default.Palette, AppStr.appLck to Icons.Default.Fingerprint),
                     hasSwitch = true,
                     isSwitchOn = currentProfile.isAppLocked,
                     onSwitchChange = { isTurningOn = it; showPinDialog = true }
                 ) { label ->
-                    if (label == AppStr.editProf) showEditProfileDialog = true
+                    when(label) {
+                        AppStr.editProf -> showEditProfileDialog = true
+                        AppStr.theme -> showThemeDialog = true
+                    }
                 }
 
                 SettingsGroupCard(
@@ -810,6 +850,23 @@ fun SettingsScreen(currentProfile: UserProfile, transactionList: List<KumaTransa
                 Column { listOf("dd MMM yyyy", "dd/MM/yyyy", "yyyy-MM-dd").forEach { f -> TextButton(onClick = { scope.launch { dao.saveProfile(currentProfile.copy(dateFormat = f)); showDateDialog = false } }) { Text(f) } } }
             }, confirmButton = {})
         }
+        if (showThemeDialog) {
+            AlertDialog(onDismissRequest = { showThemeDialog = false }, title = { Text(AppStr.theme) }, text = {
+                Column {
+                    val themeOptions = listOf(0 to AppStr.themeSys, 1 to AppStr.themeLight, 2 to AppStr.themeDark)
+                    themeOptions.forEach { (value, label) ->
+                        Row(modifier = Modifier.fillMaxWidth().clickable {
+                            scope.launch { dao.saveProfile(currentProfile.copy(themeMode = value)) }
+                            showThemeDialog = false
+                        }.padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = currentProfile.themeMode == value, onClick = null)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(label, color = AppText())
+                        }
+                    }
+                }
+            }, confirmButton = {})
+        }
         if (showPinDialog) {
             AlertDialog(
                 onDismissRequest = { showPinDialog = false; pinInput = "" },
@@ -830,7 +887,7 @@ fun SettingsScreen(currentProfile: UserProfile, transactionList: List<KumaTransa
             )
         }
         if (showVersionDialog) {
-            AlertDialog(onDismissRequest = { showVersionDialog = false }, title = { Text(AppStr.info, fontWeight = FontWeight.Bold) }, text = { Text("Versi: 1.0.0-beta\nBuild: 20260224\nTipe: Standalone Local") }, confirmButton = { TextButton(onClick = { showVersionDialog = false }) { Text(AppStr.close) } }, shape = RoundedCornerShape(24.dp), containerColor = AppBg())
+            AlertDialog(onDismissRequest = { showVersionDialog = false }, title = { Text(AppStr.info, fontWeight = FontWeight.Bold) }, text = { Text("Versi: 1.1.0\nBuild: 20260305\nTipe: Standalone Local") }, confirmButton = { TextButton(onClick = { showVersionDialog = false }) { Text(AppStr.close) } }, shape = RoundedCornerShape(24.dp), containerColor = AppBg())
         }
         if (showPrivacyDialog) {
             AlertDialog(onDismissRequest = { showPrivacyDialog = false }, title = { Text(AppStr.priv, fontWeight = FontWeight.Bold) }, text = { Column(modifier = Modifier.verticalScroll(rememberScrollState())) { Text(AppStr.privDesc) } }, confirmButton = { TextButton(onClick = { showPrivacyDialog = false }) { Text(AppStr.gotIt) } }, shape = RoundedCornerShape(24.dp), containerColor = AppBg())
@@ -839,21 +896,21 @@ fun SettingsScreen(currentProfile: UserProfile, transactionList: List<KumaTransa
             AlertDialog(onDismissRequest = { showTermsDialog = false }, title = { Text(AppStr.trms, fontWeight = FontWeight.Bold) }, text = { Column(modifier = Modifier.verticalScroll(rememberScrollState())) { Text(AppStr.termDesc) } }, confirmButton = { TextButton(onClick = { showTermsDialog = false }) { Text(AppStr.agree) } }, shape = RoundedCornerShape(24.dp), containerColor = AppBg())
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(50.dp))
         Text(
-            text = "KumaFlow v1.0.0-beta\nLocal Data Only • Privacy First",
+            text = "KumaFlow v1.1.0\nLocal Data Only • Privacy First",
             modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
             textAlign = TextAlign.Center,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             color = AppText().copy(alpha = 0.5f)
         )
+        Spacer(modifier = Modifier.height(100.dp))
     }
 }
 
 // --- 6. SHARED COMPONENTS ---
 
-// FIX: Komponen pintar buat Auto-Size Text
 @Composable
 fun AutoSizeText(
     text: String,
@@ -1026,6 +1083,10 @@ fun exportToDrive(context: Context, data: List<KumaTransaction>, profile: UserPr
 fun backupAppToJSON(context: Context, profile: UserProfile, txs: List<KumaTransaction>) {
     try {
         val root = JSONObject()
+
+        // --- NAIH KTP VERSI BACKUP ---
+        root.put("backupVersion", 1)
+
         val pJson = JSONObject().apply {
             put("userName", profile.userName)
             put("isAppLocked", profile.isAppLocked)
@@ -1033,7 +1094,7 @@ fun backupAppToJSON(context: Context, profile: UserProfile, txs: List<KumaTransa
             put("currency", profile.currency)
             put("dateFormat", profile.dateFormat)
             put("monthlyTarget", profile.monthlyTarget)
-            put("isDarkMode", profile.isDarkMode)
+            put("themeMode", profile.themeMode)
         }
         root.put("profile", pJson)
         val tArr = JSONArray()
@@ -1103,7 +1164,6 @@ fun IncomeExpensePill(label: String, amount: String, color: Color, isUp: Boolean
             Text(" $label", color = color, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp)
         }
 
-        // FIX: Pakai AutoSizeText buat di dalem Pill
         AutoSizeText(
             text = amount,
             color = Color.White,
@@ -1118,8 +1178,15 @@ fun IncomeExpensePill(label: String, amount: String, color: Color, isUp: Boolean
 fun ReportLegendItem(label: String, color: Color, amount: String) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(12.dp)).background(AppSurfaceVariant()).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(modifier = Modifier.size(12.dp).background(color, CircleShape))
-        Text(" $label", modifier = Modifier.weight(1f).padding(start = 12.dp), color = AppText(), fontWeight = FontWeight.Bold)
-        Text(amount, color = AppText(), fontWeight = FontWeight.Bold)
+        Text(" $label", modifier = Modifier.weight(1f).padding(start = 12.dp), color = AppText(), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        AutoSizeText(
+            text = amount,
+            color = AppText(),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 8.dp),
+            minimumFallbackSize = 8.sp
+        )
     }
 }
 
@@ -1133,7 +1200,10 @@ fun LegendItem(label: String, color: Color) {
 }
 
 @Composable
-fun TransactionItem(profile: UserProfile, trans: KumaTransaction) {
+fun TransactionItem(profile: UserProfile, trans: KumaTransaction, onEdit: (KumaTransaction) -> Unit, onDelete: (KumaTransaction) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
     val curSym = when(profile.currency) {
         "USD", "AUD", "CAD", "SGD" -> "$"
         "EUR" -> "€"
@@ -1143,25 +1213,50 @@ fun TransactionItem(profile: UserProfile, trans: KumaTransaction) {
         else -> "Rp"
     }
     val icon = when(trans.category) { "Financial" -> Icons.Default.AccountBalance; "Food" -> Icons.Default.Restaurant; "Shopping" -> Icons.Default.LocalMall; "Health" -> Icons.Default.Favorite; "Transport" -> Icons.Default.DirectionsCar; "Education" -> Icons.Default.School; "Entertainment" -> Icons.Default.Gamepad; else -> Icons.Default.Category }
-    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFD5641C))) {
-        Row(modifier = Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(45.dp).background(Color.White.copy(alpha = 0.3f), CircleShape), contentAlignment = Alignment.Center) { Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp)) }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(trans.name, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
-                if (trans.message.isNotEmpty()) { Text(trans.message, color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp, bottom = 2.dp)) }
-                Text(trans.date, color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
-            }
-            val formatted = try { NumberFormat.getInstance(Locale.forLanguageTag("id-ID")).format(trans.amount.toLong()) } catch (_: Exception) { trans.amount }
 
-            // FIX: Buat item list juga dibikin AutoSize biar aman kalau ada yang nabung 1 Triliun
-            AutoSizeText(
-                text = "${if (trans.isIncome) "+ " else "- "} $curSym $formatted",
-                color = if (trans.isIncome) Color.White else AppText(),
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.widthIn(max = 120.dp),
-                minimumFallbackSize = 10.sp
-            )
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text(AppStr.delConf) },
+            confirmButton = { Button(onClick = { onDelete(trans); showDeleteDialog = false }, colors = ButtonDefaults.buttonColors(containerColor = AppRed())) { Text(AppStr.yes) } },
+            dismissButton = { TextButton(onClick = { showDeleteDialog = false }) { Text(AppStr.no, color = AppText()) } }
+        )
+    }
+
+    Card(modifier = Modifier.fillMaxWidth().clickable { expanded = true }, shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFD5641C))) {
+        Box {
+            Row(modifier = Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(45.dp).background(Color.White.copy(alpha = 0.3f), CircleShape), contentAlignment = Alignment.Center) { Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp)) }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(trans.name, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (trans.message.isNotEmpty()) { Text(trans.message, color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp, bottom = 2.dp), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    Text(trans.date, color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
+                }
+                val formatted = try { NumberFormat.getInstance(Locale.forLanguageTag("id-ID")).format(trans.amount.toLong()) } catch (_: Exception) { trans.amount }
+
+                AutoSizeText(
+                    text = "${if (trans.isIncome) "+ " else "- "} $curSym $formatted",
+                    color = if (trans.isIncome) Color.White else AppText(),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.widthIn(max = 120.dp).padding(start = 8.dp),
+                    minimumFallbackSize = 10.sp
+                )
+            }
+
+            // Menu Edit & Delete
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                DropdownMenuItem(
+                    text = { Text(AppStr.edit) },
+                    onClick = { onEdit(trans); expanded = false },
+                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
+                )
+                DropdownMenuItem(
+                    text = { Text(AppStr.delete, color = AppRed()) },
+                    onClick = { showDeleteDialog = true; expanded = false },
+                    leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = AppRed()) }
+                )
+            }
         }
     }
 }
