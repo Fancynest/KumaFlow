@@ -2,15 +2,20 @@
 
 package com.bearbones.kumaflow
 
+import android.Manifest
 import android.app.Activity
+import android.app.TimePickerDialog
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.Canvas
@@ -69,6 +74,7 @@ import java.io.FileOutputStream
 import java.text.NumberFormat
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
 
@@ -151,7 +157,7 @@ object AppStr {
     val failBak get() = if(isId) "Gagal membackup aplikasi" else "Failed to backup app"
     val noFileMgr get() = if(isId) "Aplikasi File Manager tidak ditemukan" else "File Manager app not found"
 
-    // Theme & Edit Strings
+    // Theme, Edit & Notification Strings
     val theme get() = if(isId) "Tema Tampilan" else "App Theme"
     val themeSys get() = if(isId) "Ikuti Sistem" else "Use System Setting"
     val themeDark get() = if(isId) "Mode Gelap" else "Dark Mode"
@@ -161,6 +167,10 @@ object AppStr {
     val delConf get() = if(isId) "Yakin hapus transaksi ini?" else "Delete this transaction?"
     val yes get() = if(isId) "Ya, Hapus" else "Yes, Delete"
     val no get() = if(isId) "Batal" else "Cancel"
+    val notif get() = if(isId) "Notifikasi & Pengingat" else "Notifications & Reminders"
+    val dailyRem get() = if(isId) "Pengingat Harian" else "Daily Reminder"
+    val timeDay get() = if(isId) "Jam Pengingat Siang" else "Day Reminder Time"
+    val timeNight get() = if(isId) "Jam Pengingat Malam" else "Night Reminder Time"
 }
 
 // --- 0. THEME ENGINE ---
@@ -191,7 +201,10 @@ data class UserProfile(
     val currency: String = "IDR",
     val dateFormat: String = "dd MMM yyyy",
     val monthlyTarget: Long = 0L,
-    val themeMode: Int = 0 // FIX: 0=System, 1=Light, 2=Dark
+    val themeMode: Int = 0,
+    val isReminderOn: Boolean = false,
+    val reminderTime1: String = "13:00",
+    val reminderTime2: String = "20:00"
 )
 
 @Dao
@@ -221,7 +234,8 @@ interface TransactionDao {
     suspend fun clearTransactions()
 }
 
-@Database(entities = [KumaTransaction::class, UserProfile::class], version = 7, exportSchema = false)
+// Database version incremented to 8 for Notification Preferences implementation
+@Database(entities = [KumaTransaction::class, UserProfile::class], version = 8, exportSchema = false)
 abstract class KumaDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     companion object {
@@ -720,16 +734,24 @@ fun SettingsScreen(currentProfile: UserProfile, transactionList: List<KumaTransa
     var isTurningOn by remember { mutableStateOf(true) }
     var newName by remember { mutableStateOf(currentProfile.userName) }
 
+    // Handles the selection of a new time via Android's native TimePickerDialog
+    fun showTimePicker(currentTime: String, onTimeSelected: (String) -> Unit) {
+        val parts = currentTime.split(":")
+        val hour = parts.getOrNull(0)?.toIntOrNull() ?: 12
+        val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
+
+        TimePickerDialog(context, { _, selectedHour, selectedMinute ->
+            val formattedTime = String.format(Locale.getDefault(), "%02d:%02d", selectedHour, selectedMinute)
+            onTimeSelected(formattedTime)
+        }, hour, minute, true).show()
+    }
+
     LaunchedEffect(mainActivity?.pendingRestoreJson) {
         val jsonToRestore = mainActivity?.pendingRestoreJson
         if (jsonToRestore != null) {
             scope.launch(Dispatchers.IO) {
                 try {
                     val root = JSONObject(jsonToRestore)
-
-                    // --- BACA KTP VERSI BACKUP (Default 1) ---
-                    val backupVer = root.optInt("backupVersion", 1)
-
                     val pObj = root.getJSONObject("profile")
                     val newProfile = UserProfile(
                         userName = pObj.optString("userName", "User"),
@@ -738,7 +760,10 @@ fun SettingsScreen(currentProfile: UserProfile, transactionList: List<KumaTransa
                         currency = pObj.optString("currency", "IDR"),
                         dateFormat = pObj.optString("dateFormat", "dd MMM yyyy"),
                         monthlyTarget = pObj.optLong("monthlyTarget", 0L),
-                        themeMode = pObj.optInt("themeMode", 0)
+                        themeMode = pObj.optInt("themeMode", 0),
+                        isReminderOn = pObj.optBoolean("isReminderOn", false),
+                        reminderTime1 = pObj.optString("reminderTime1", "13:00"),
+                        reminderTime2 = pObj.optString("reminderTime2", "20:00")
                     )
                     dao.saveProfile(newProfile)
 
@@ -766,6 +791,13 @@ fun SettingsScreen(currentProfile: UserProfile, transactionList: List<KumaTransa
 
                     withContext(Dispatchers.Main) {
                         Toast.makeText(context, AppStr.resOk, Toast.LENGTH_SHORT).show()
+                        // Reschedule alarms after successful restore
+                        if(newProfile.isReminderOn) {
+                            val t1 = newProfile.reminderTime1.split(":")
+                            val t2 = newProfile.reminderTime2.split(":")
+                            if(t1.size == 2) KumaReminderManager.scheduleReminder(context, t1[0].toInt(), t1[1].toInt(), KumaReminderManager.REMINDER_1_REQ_CODE)
+                            if(t2.size == 2) KumaReminderManager.scheduleReminder(context, t2[0].toInt(), t2[1].toInt(), KumaReminderManager.REMINDER_2_REQ_CODE)
+                        }
                     }
                 } catch (e: Exception) {
                     withContext(Dispatchers.Main) {
@@ -810,6 +842,80 @@ fun SettingsScreen(currentProfile: UserProfile, transactionList: List<KumaTransa
                     }
                 )
             }
+
+            // Notification Settings Card
+            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = AppSurface())) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(AppStr.notif, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp, color = AppText(), modifier = Modifier.align(Alignment.CenterHorizontally))
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.NotificationsActive, contentDescription = null, tint = AppText(), modifier = Modifier.size(20.dp))
+                        Text(AppStr.dailyRem, modifier = Modifier.weight(1f).padding(start = 10.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = AppText())
+                        Switch(
+                            checked = currentProfile.isReminderOn,
+                            onCheckedChange = { isChecked ->
+                                if (isChecked) {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                            // FIX BUG: Bypass Compose Launcher, pake Native Android Permission biar nggak force close
+                                            mainActivity?.let {
+                                                androidx.core.app.ActivityCompat.requestPermissions(it, arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+                                            }
+                                            scope.launch { dao.saveProfile(currentProfile.copy(isReminderOn = false)) }
+                                            Toast.makeText(context, "Izinkan notifikasi di pop-up, lalu nyalakan ulang toggle-nya!", Toast.LENGTH_LONG).show()
+                                        } else {
+                                            scope.launch { dao.saveProfile(currentProfile.copy(isReminderOn = true)) }
+                                            val time1 = currentProfile.reminderTime1.split(":")
+                                            val time2 = currentProfile.reminderTime2.split(":")
+                                            if(time1.size == 2) KumaReminderManager.scheduleReminder(context, time1[0].toInt(), time1[1].toInt(), KumaReminderManager.REMINDER_1_REQ_CODE)
+                                            if(time2.size == 2) KumaReminderManager.scheduleReminder(context, time2[0].toInt(), time2[1].toInt(), KumaReminderManager.REMINDER_2_REQ_CODE)
+                                        }
+                                    } else {
+                                        scope.launch { dao.saveProfile(currentProfile.copy(isReminderOn = true)) }
+                                        val time1 = currentProfile.reminderTime1.split(":")
+                                        val time2 = currentProfile.reminderTime2.split(":")
+                                        if(time1.size == 2) KumaReminderManager.scheduleReminder(context, time1[0].toInt(), time1[1].toInt(), KumaReminderManager.REMINDER_1_REQ_CODE)
+                                        if(time2.size == 2) KumaReminderManager.scheduleReminder(context, time2[0].toInt(), time2[1].toInt(), KumaReminderManager.REMINDER_2_REQ_CODE)
+                                    }
+                                } else {
+                                    scope.launch { dao.saveProfile(currentProfile.copy(isReminderOn = false)) }
+                                    KumaReminderManager.cancelReminder(context, KumaReminderManager.REMINDER_1_REQ_CODE)
+                                    KumaReminderManager.cancelReminder(context, KumaReminderManager.REMINDER_2_REQ_CODE)
+                                }
+                            },
+                            modifier = Modifier.scale(0.8f)
+                        )
+                    }
+
+                    if (currentProfile.isReminderOn) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(modifier = Modifier.fillMaxWidth().clickable {
+                            showTimePicker(currentProfile.reminderTime1) { selectedTime ->
+                                scope.launch { dao.saveProfile(currentProfile.copy(reminderTime1 = selectedTime)) }
+                                val parts = selectedTime.split(":")
+                                if(parts.size == 2) KumaReminderManager.scheduleReminder(context, parts[0].toInt(), parts[1].toInt(), KumaReminderManager.REMINDER_1_REQ_CODE)
+                            }
+                        }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.WbSunny, contentDescription = null, tint = AppText(), modifier = Modifier.size(16.dp))
+                            Text(AppStr.timeDay, modifier = Modifier.weight(1f).padding(start = 10.dp), fontSize = 11.sp, color = AppText())
+                            Text(currentProfile.reminderTime1, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = AppPrimary())
+                        }
+                        Row(modifier = Modifier.fillMaxWidth().clickable {
+                            showTimePicker(currentProfile.reminderTime2) { selectedTime ->
+                                scope.launch { dao.saveProfile(currentProfile.copy(reminderTime2 = selectedTime)) }
+                                val parts = selectedTime.split(":")
+                                if(parts.size == 2) KumaReminderManager.scheduleReminder(context, parts[0].toInt(), parts[1].toInt(), KumaReminderManager.REMINDER_2_REQ_CODE)
+                            }
+                        }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.NightsStay, contentDescription = null, tint = AppText(), modifier = Modifier.size(16.dp))
+                            Text(AppStr.timeNight, modifier = Modifier.weight(1f).padding(start = 10.dp), fontSize = 11.sp, color = AppText())
+                            Text(currentProfile.reminderTime2, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = AppPrimary())
+                        }
+                    }
+                }
+            }
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 SettingsGroupCard(AppStr.dat, Modifier.weight(1f), listOf(AppStr.expPdf to Icons.Default.PictureAsPdf, AppStr.expCsv to Icons.Default.Description, AppStr.expDrive to Icons.Default.AddToDrive, AppStr.backApp to Icons.Default.CloudUpload, AppStr.rest to Icons.Default.History)) { label ->
                     when (label) {
@@ -908,7 +1014,6 @@ fun SettingsScreen(currentProfile: UserProfile, transactionList: List<KumaTransa
         Spacer(modifier = Modifier.height(100.dp))
     }
 }
-
 // --- 6. SHARED COMPONENTS ---
 
 @Composable
@@ -1095,6 +1200,9 @@ fun backupAppToJSON(context: Context, profile: UserProfile, txs: List<KumaTransa
             put("dateFormat", profile.dateFormat)
             put("monthlyTarget", profile.monthlyTarget)
             put("themeMode", profile.themeMode)
+            put("isReminderOn", profile.isReminderOn)
+            put("reminderTime1", profile.reminderTime1)
+            put("reminderTime2", profile.reminderTime2)
         }
         root.put("profile", pJson)
         val tArr = JSONArray()
