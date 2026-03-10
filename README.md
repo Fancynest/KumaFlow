@@ -23,8 +23,7 @@ KumaFlow is a lightweight, privacy-focused Android application for managing pers
 ---
 
 📦 Getting Started
-
-- Version: v1.0.1 
+ 
 - Min SDK: 27 (Android 8.1) 
 
 🚀 For Developers
