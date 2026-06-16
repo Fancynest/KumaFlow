@@ -13,8 +13,8 @@ android {
         applicationId = "com.bearbones.kumaflow"
         minSdk = 27
         targetSdk = 35
-        versionCode = 6
-        versionName = "3.0.0"
+        versionCode = 18
+        versionName = "4.5.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -41,7 +41,7 @@ android {
 }
 
 dependencies {
-    // Pake libraries dari BOM biar stabil
+    // Pake libraries dari BOM agar stabil
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -52,6 +52,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
+    implementation("androidx.compose.material:material-icons-extended")
 
     // ROOM DATABASE (Stable Version)
     implementation("androidx.room:room-runtime:2.6.1")

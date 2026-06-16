@@ -8,6 +8,11 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:allowBackup="true"
@@ -34,22 +39,83 @@
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.KumaFlow">
+        </activity>
+
+        <!-- PINTU 1: LOGO NORMAL (Default Aktif) -->
+        <activity-alias
+            android:name=".MainActivityAliasNormal"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:enabled="true"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <!-- PINTU 2: LOGO PRIDE (Default Mati) -->
+        <activity-alias
+            android:name=".MainActivityAliasPride"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_pride1"
+            android:roundIcon="@mipmap/ic_launcher_pride1_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- PINTU 3: LOGO BEAR PRIDE (Default Mati) -->
+        <activity-alias
+            android:name=".MainActivityAliasBear"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_bear_pride"
+            android:roundIcon="@mipmap/ic_launcher_bear_pride_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <service
+            android:name=".KumaService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="alarm_scheduler"/>
+        </service>
+        <!--
         <receiver
-            android:name=".KumaReminderReceiver"
+            android:name=".KumaReminder"
+            android:enabled="true"
             android:exported="false" />
 
         <receiver
             android:name=".KumaBootReceiver"
+            android:enabled="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
+            -->
+        <receiver android:name=".KumaWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.bearbones.kumaflow.UPDATE_WIDGET" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/kumaflow_widget_info" />
+        </receiver>
+
     </application>
 
 </manifest>

@@ -1,3 +1,7 @@
+/*
+
+@file:Suppress("SpellCheckingInspection", "UNUSED_PARAMETER", "unused", "CanBeVal", "DEPRECATION", "ScheduleExactAlarm")
+
 package com.bearbones.kumaflow
 
 import android.app.AlarmManager
@@ -5,176 +9,181 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.ContentResolver
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import android.annotation.SuppressLint
 
-/**
- * Manager class responsible for scheduling, canceling, and displaying daily local notifications.
- * It utilizes AlarmManager to ensure precise delivery times.
- */
-object KumaReminderManager {
-    private const val CHANNEL_ID = "kumaflow_reminder_channel"
-    const val REMINDER_1_REQ_CODE = 101
-    const val REMINDER_2_REQ_CODE = 102
+class KumaReminder : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        // MAKSIMALIN WAKE-UP
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "KumaFlow:AlarmWakeLock")
+        wakeLock.acquire(10000L) // Paksa bangun selama 10 detik
 
-    /**
-     * Schedules an exact alarm for the specified hour and minute.
-     */
-    fun scheduleReminder(context: Context, hour: Int, minute: Int, requestCode: Int) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, KumaReminderReceiver::class.java).apply {
-            putExtra("REQUEST_CODE", requestCode)
-        }
-
-        // Enforce FLAG_IMMUTABLE for PendingIntent security compliance in modern Android
-        val pendingIntent = PendingIntent.getBroadcast(
-            context, requestCode, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val calendar = Calendar.getInstance().apply {
-            timeInMillis = System.currentTimeMillis()
-            set(Calendar.HOUR_OF_DAY, hour)
-            set(Calendar.MINUTE, minute)
-            set(Calendar.SECOND, 0)
-
-            // If the specified time has already passed today, schedule it for tomorrow
-            if (before(Calendar.getInstance())) {
-                add(Calendar.DATE, 1)
-            }
-        }
-
-        // Use setExactAndAllowWhileIdle to ensure the alarm triggers even if the device is in Doze mode
         try {
-            alarmManager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                calendar.timeInMillis,
-                pendingIntent
-            )
-        } catch (e: SecurityException) {
-            // Failsafe for Android 14+ if the user explicitly revokes exact alarm permission
-            e.printStackTrace()
-        }
-    }
+            Toast.makeText(context, "Alarm Triggered!", Toast.LENGTH_SHORT).show()
+            showNotification(context)
 
-    /**
-     * Cancels an existing scheduled alarm based on its request code.
-     */
-    fun cancelReminder(context: Context, requestCode: Int) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(context, KumaReminderReceiver::class.java)
-        val pendingIntent = PendingIntent.getBroadcast(
-            context, requestCode, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        alarmManager.cancel(pendingIntent)
-    }
-
-    /**
-     * Builds and fires the local notification with a randomized copy array.
-     */
-    fun showNotification(context: Context) {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        // Create the NotificationChannel, required on Android 8.0 (API 26) and above
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "KumaFlow Daily Reminder",
-                NotificationManager.IMPORTANCE_DEFAULT
-            ).apply {
-                description = "Daily reminders for expense tracking"
-            }
-            notificationManager.createNotificationChannel(channel)
-        }
-
-        // Define the pool of randomized reminder messages
-        val messages = listOf(
-            Pair("Waktunya rekap hari ini! \uD83D\uDCDD", "Mari luangkan waktu 1 menit buat nyatet pengeluaran hari ini biar keuangan tetap aman."),
-            Pair("Saldo bulan ini masih aman? \uD83D\uDCB0", "Jangan sampai ada pengeluaran yang terlewat. Yuk, catat dulu di KumaFlow sebelum lupa!"),
-            Pair("Kuma nungguin catatanmu nih \uD83D\uDC3B✨", "Hari ini ada transaksi apa saja? Sini setor catatannya ke KumaFlow."),
-            Pair("Persiapan sebelum istirahat \uD83C\uDF19", "Catat pengeluaran hari ini biar besok bangun dengan pikiran tenang. Selamat istirahat!"),
-            Pair("Satu langkah kecil buat nabung! \uD83D\uDCC8", "Disiplin mencatat adalah kunci. Yuk absen dulu pengeluaran atau pemasukanmu hari ini.")
-        )
-
-        // Select a random message to prevent notification fatigue
-        val randomMsg = messages.random()
-
-        // Construct the intent to open the application when the notification is tapped
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(randomMsg.first)
-            .setContentText(randomMsg.second)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-
-        // Dispatch the notification
-        notificationManager.notify(1001, builder.build())
-    }
-}
-
-/**
- * BroadcastReceiver responsible for triggering the notification and rescheduling the next exact alarm.
- */
-class KumaReminderReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        KumaReminderManager.showNotification(context)
-
-        val reqCode = intent.getIntExtra("REQUEST_CODE", -1)
-
-        // Asynchronously fetch user preferences from Room to reschedule the next occurrence
-        CoroutineScope(Dispatchers.IO).launch {
-            val db = KumaDatabase.getDatabase(context)
-            val profile = db.transactionDao().getUserProfile().firstOrNull()
-
-            if (profile != null && profile.isReminderOn) {
-                if (reqCode == KumaReminderManager.REMINDER_1_REQ_CODE) {
-                    val parts = profile.reminderTime1.split(":")
-                    if (parts.size == 2) KumaReminderManager.scheduleReminder(context, parts[0].toInt(), parts[1].toInt(), reqCode)
-                } else if (reqCode == KumaReminderManager.REMINDER_2_REQ_CODE) {
-                    val parts = profile.reminderTime2.split(":")
-                    if (parts.size == 2) KumaReminderManager.scheduleReminder(context, parts[0].toInt(), parts[1].toInt(), reqCode)
-                }
-            }
-        }
-    }
-}
-
-/**
- * BroadcastReceiver responsible for restoring alarms after a device reboot.
- * This ensures reminders persist across system restarts.
- */
-class KumaBootReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
             CoroutineScope(Dispatchers.IO).launch {
                 val db = KumaDatabase.getDatabase(context)
                 val profile = db.transactionDao().getUserProfile().firstOrNull()
 
                 if (profile != null && profile.isReminderOn) {
-                    val parts1 = profile.reminderTime1.split(":")
-                    if (parts1.size == 2) KumaReminderManager.scheduleReminder(context, parts1[0].toInt(), parts1[1].toInt(), KumaReminderManager.REMINDER_1_REQ_CODE)
+                    scheduleKumaReminders(context, profile)
+                }
+            }
+        } finally {
+            if (wakeLock.isHeld) wakeLock.release()
+        }
+    }
 
-                    val parts2 = profile.reminderTime2.split(":")
-                    if (parts2.size == 2) KumaReminderManager.scheduleReminder(context, parts2[0].toInt(), parts2[1].toInt(), KumaReminderManager.REMINDER_2_REQ_CODE)
+    private fun showNotification(context: Context) {
+        val channelId = "kumaflow_reminder_channel_v6"
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val soundUri = Uri.parse("${ContentResolver.SCHEME_ANDROID_RESOURCE}://${context.packageName}/${R.raw.kumaflownotification}")
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val audioAttributes = AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .build()
+
+            val channel = NotificationChannel(
+                channelId,
+                "KumaFlow Reminder",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Pengingat untuk mencatat pengeluaran"
+                setSound(soundUri, audioAttributes)
+                enableVibration(true)
+                vibrationPattern = longArrayOf(1000, 1000, 1000, 1000, 1000)
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val messages = listOf(
+            Pair("Satu bulan saldonya ke mana? \uD83E\uDD40", "Duit abis berlebihan itu nggak baik. Yuk catat pengeluaran hari ini."),
+            Pair("Takut tambah dewasa... dan miskin \uD83D\uDE2D", "Yuk absen dulu hari ini sebelum duitnya nguap nggak jelas."),
+            Pair("Sialnya ku kenal Paylater~ \uD83D\uDC94", "Sisa rasa penyesalan doang kalau nggak dicatat dari sekarang."),
+            Pair("Lantas mengapa ku masih jajan? \uD83C\uDFA7", "Mending evaluasi dulu pengeluaran kamu hari ini deh."),
+            Pair("Berapa harga kewarasan ini? \uD83E\uDD7A", "Catat pengeluaran kamu sekarang yuk ah!"),
+            Pair("Kita usahakan backup itu... \uD83C\uDF27️", "Biar kalau HP error, catatan keuangan nggak ikut ngilang."),
+            Pair("Ingat Kata Pepatah! ☔", "Sedia backup sebelum HP error. Yuk cadangkan data KumaFlow kamu.")
+        )
+
+        val randomMsg = messages.random()
+
+        val mainIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context, 0, mainIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_kuma_notif)
+            .setContentTitle(randomMsg.first)
+            .setContentText(randomMsg.second)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
+            .setSound(soundUri)
+            .setVibrate(longArrayOf(1000, 1000, 1000, 1000, 1000))
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+
+        notificationManager.notify(System.currentTimeMillis().toInt(), builder.build())
+    }
+}
+
+class KumaBootReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val action = intent.action
+        if (action == Intent.ACTION_BOOT_COMPLETED || action == "android.intent.action.QUICKBOOT_POWERON") {
+            CoroutineScope(Dispatchers.IO).launch {
+                val db = KumaDatabase.getDatabase(context)
+                val profile = db.transactionDao().getUserProfile().firstOrNull()
+
+                if (profile != null && profile.isReminderOn) {
+                    scheduleKumaReminders(context, profile)
                 }
             }
         }
     }
 }
+
+
+@SuppressLint("ScheduleExactAlarm")
+/*
+fun scheduleKumaReminders(context: Context, profile: UserProfile) {
+    val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (!alarmManager.canScheduleExactAlarms()) {
+            Toast.makeText(context, "Ijinkan KumaFlow buat Alarm Akurat dulu di Settings!", Toast.LENGTH_LONG).show()
+            val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            try {
+                context.startActivity(intent)
+            } catch (_: Exception) {
+            }
+            return
+        }
+    }
+
+    val intent = Intent(context, KumaReminder::class.java)
+
+    // Bersihin alarm lama biar nggak numpuk
+    for (i in 0..4) {
+        val pendingIntent = PendingIntent.getBroadcast(context, i, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        alarmManager.cancel(pendingIntent)
+    }
+
+    if (!profile.isReminderOn) return
+
+    val times = profile.reminderTimes.split(",")
+    times.forEachIndexed { index, timeStr ->
+        val parts = timeStr.split(":")
+        if (parts.size == 2) {
+            val hour = parts[0].toIntOrNull() ?: 0
+            val min = parts[1].toIntOrNull() ?: 0
+
+            val calendar = Calendar.getInstance().apply {
+                timeInMillis = System.currentTimeMillis()
+                set(Calendar.HOUR_OF_DAY, hour)
+                set(Calendar.MINUTE, min)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+
+            if (calendar.timeInMillis <= System.currentTimeMillis()) {
+                calendar.add(Calendar.DAY_OF_YEAR, 1)
+            }
+
+            val pendingIntent = PendingIntent.getBroadcast(context, index, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+            try {
+                // The Nuclear Option: Pakai setAlarmClock biar tembus penjagaan sistem ColorOS
+                val alarmClockInfo = AlarmManager.AlarmClockInfo(calendar.timeInMillis, pendingIntent)
+                alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+}
+*/
