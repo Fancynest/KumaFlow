@@ -1737,10 +1737,32 @@ fun HomeScreen(
 
         if (filteredTx.isEmpty()) {
             item {
-                Column(modifier = Modifier.fillMaxWidth().height(200.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Text("ʕ•ᴥ•ʔ", fontSize = 64.sp, color = AppText().copy(alpha = 0.3f))
+                Column(
+                    modifier = Modifier.fillMaxWidth().height(250.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    // --- KODINGAN AJAIB LOTTIE ---
+                    val composition by com.airbnb.lottie.compose.rememberLottieComposition(com.airbnb.lottie.compose.LottieCompositionSpec.RawRes(R.raw.beruang_kosong))
+                    val progress by com.airbnb.lottie.compose.animateLottieCompositionAsState(
+                        composition = composition,
+                        iterations = com.airbnb.lottie.compose.LottieConstants.IterateForever // Biar animasinya looping terus kaga berhenti
+                    )
+
+                    com.airbnb.lottie.compose.LottieAnimation(
+                        composition = composition,
+                        progress = { progress },
+                        modifier = Modifier.size(150.dp) // Ukuran beruangnya, bisa lu gede-kecilin sendiri
+                    )
+                    // -----------------------------
+
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text(AppStr.noTx, textAlign = TextAlign.Center, color = AppText().copy(alpha = 0.5f), fontWeight = FontWeight.Bold)
+                    Text(
+                        AppStr.noTx,
+                        textAlign = TextAlign.Center,
+                        color = AppText().copy(alpha = 0.5f),
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         } else {

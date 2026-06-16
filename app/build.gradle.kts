@@ -13,8 +13,8 @@ android {
         applicationId = "com.bearbones.kumaflow"
         minSdk = 27
         targetSdk = 35
-        versionCode = 19
-        versionName = "4.6.3"
+        versionCode = 20
+        versionName = "4.6.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -67,4 +67,6 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    implementation("com.airbnb.android:lottie-compose:6.4.0")
 }

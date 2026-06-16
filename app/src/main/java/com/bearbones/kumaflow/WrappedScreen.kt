@@ -43,6 +43,8 @@ fun WrappedScreen(
     onClose: () -> Unit
 ) {
     val locale = Locale.forLanguageTag("id-ID")
+    val isId = AppStr.isId // Tarik data bahasa dari main app
+
     val curSym = when(profile.currency) {
         "USD", "AUD", "CAD", "SGD" -> "$"
         "EUR" -> "€"
@@ -52,9 +54,6 @@ fun WrappedScreen(
         else -> "Rp"
     }
 
-    // 🔥 VARIABEL FONT (Udah disiapin biar gampang) 🔥
-    // Nanti kalau lu udah dapet file googlesans.ttf dan ditaruh di folder res/font,
-    // lu tinggal ganti jadi: val googleFont = FontFamily(Font(R.font.googlesans))
     val googleFont = FontFamily.SansSerif
 
     // --- KALKULASI DATA WRAPPED ---
@@ -65,21 +64,21 @@ fun WrappedScreen(
     val totalInc = incomes.sumOf { it.amount.toLongOrNull() ?: 0L }
 
     val categoryGroup = expenses.groupBy { it.category }.mapValues { it.value.sumOf { t -> t.amount.toLongOrNull() ?: 0L } }
-    val topCategory = categoryGroup.maxByOrNull { it.value }?.key ?: "Belum ada"
+    val topCategory = categoryGroup.maxByOrNull { it.value }?.key ?: if (isId) "Belum ada" else "Nothing yet"
     val topCatAmount = categoryGroup[topCategory] ?: 0L
 
     val biggestTx = expenses.maxByOrNull { it.amount.toLongOrNull() ?: 0L }
     val biggestInc = incomes.maxByOrNull { it.amount.toLongOrNull() ?: 0L }
 
     val persona = when {
-        totalExp == 0L -> "Sepuh Frugal Living \uD83E\uDDDD\u200D♂\uFE0F"
-        categoryGroup["Food"] ?: 0L > totalExp / 3 -> "Foodie Sejati \uD83C\uDF54"
-        categoryGroup["Shopping"] ?: 0L > totalExp / 3 -> "Trendsetter FOMO \uD83D\uDECD\uFE0F"
-        totalExp > totalInc && totalInc > 0L -> "Donatur Tetap Kafe ☕"
-        else -> "Si Paling Bijak \uD83E\uDD13"
+        totalExp == 0L -> if (isId) "Sepuh Frugal Living \uD83E\uDDDD\u200D♂\uFE0F" else "Frugal Living Master \uD83E\uDDDD\u200D♂\uFE0F"
+        categoryGroup["Food"] ?: 0L > totalExp / 3 -> if (isId) "Foodie Sejati \uD83C\uDF54" else "Certified Foodie \uD83C\uDF54"
+        categoryGroup["Shopping"] ?: 0L > totalExp / 3 -> if (isId) "Trendsetter FOMO \uD83D\uDECD\uFE0F" else "FOMO Trendsetter \uD83D\uDECD\uFE0F"
+        totalExp > totalInc && totalInc > 0L -> if (isId) "Donatur Tetap Kafe ☕" else "Cafe's Sugar Daddy ☕"
+        else -> if (isId) "Si Paling Bijak \uD83E\uDD13" else "The Wise Spender \uD83E\uDD13"
     }
 
-    // --- LOGIKA IG STORY ---
+    // --- LOGIKA IG STORY (DURASI DIPERPANJANG JADI 8 DETIK) ---
     val pages = 6
     val pagerState = rememberPagerState(pageCount = { pages })
     val coroutineScope = rememberCoroutineScope()
@@ -87,15 +86,27 @@ fun WrappedScreen(
     var isPaused by remember { mutableStateOf(false) }
     val progressAnim = remember { Animatable(0f) }
 
+    // 🔥 FIX BUG NYANGKUT: Reset timer pas ganti page
+    LaunchedEffect(pagerState.currentPage) {
+        progressAnim.snapTo(0f)
+    }
+
+    // 🔥 FIX BUG NYANGKUT: Pisahin animasi pindah layar dari efek Pause
     LaunchedEffect(pagerState.currentPage, isPaused) {
         if (!isPaused) {
-            progressAnim.snapTo(0f)
-            progressAnim.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(durationMillis = 5000, easing = LinearEasing)
-            )
-            if (pagerState.currentPage < pages - 1) {
-                pagerState.animateScrollToPage(pagerState.currentPage + 1)
+            val remainingTime = ((1f - progressAnim.value) * 8000).toInt() // Durasi sekarang 8 detik
+            if (remainingTime > 0) {
+                progressAnim.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(durationMillis = remainingTime, easing = LinearEasing)
+                )
+            }
+
+            // Pas nyampe 100%, pindah layar pake coroutine luar biar kaga ke-cancel pas disentuh!
+            if (progressAnim.value >= 1f && pagerState.currentPage < pages - 1) {
+                coroutineScope.launch {
+                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                }
             }
         }
     }
@@ -109,7 +120,6 @@ fun WrappedScreen(
         Color(0xFFFF5500)  // Orange
     )
 
-    // DAFTAR GAMBAR BACKGROUND
     val bgImages = listOf(
         R.drawable.bg_slide_1,
         R.drawable.bg_slide_2,
@@ -151,7 +161,6 @@ fun WrappedScreen(
             val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
 
             Box(modifier = Modifier.fillMaxSize()) {
-                // GAMBAR BACKGROUND
                 Image(
                     painter = painterResource(id = bgImages[page % bgImages.size]),
                     contentDescription = "Background Slide $page",
@@ -159,14 +168,12 @@ fun WrappedScreen(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // FILTER GELAP DI LATAR BELAKANG BIAR CARD LEBIH POP OUT
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(Color.Black.copy(alpha = 0.4f))
                 )
 
-                // KONTEN KARTU
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -187,7 +194,6 @@ fun WrappedScreen(
                             .fillMaxWidth()
                             .wrapContentHeight()
                             .border(2.dp, pageColor, RoundedCornerShape(32.dp)),
-                        // 🔥 INI FIX-NYA: Warna Card jadi Item Solid, kaga transparan lagi! 🔥
                         colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A)),
                         shape = RoundedCornerShape(32.dp)
                     ) {
@@ -197,60 +203,64 @@ fun WrappedScreen(
                         ) {
                             when (page) {
                                 0 -> {
-                                    Text("BULAN INI", fontFamily = googleFont, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                                    Text(if(isId) "BULAN INI" else "THIS MONTH", fontFamily = googleFont, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                                     Spacer(modifier = Modifier.height(16.dp))
-                                    Text("Kamu udah ngeluarin duit sebanyak...", fontFamily = googleFont, color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
+                                    Text(if(isId) "Kamu udah ngeluarin duit sebanyak..." else "You've successfully burned through...", fontFamily = googleFont, color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
                                     Spacer(modifier = Modifier.height(24.dp))
                                     Text("$curSym ${NumberFormat.getInstance(locale).format(totalExp)}", fontFamily = googleFont, fontSize = 42.sp, fontWeight = FontWeight.Black, color = pageColor, textAlign = TextAlign.Center, lineHeight = 48.sp)
                                     Spacer(modifier = Modifier.height(24.dp))
-                                    Text(if (totalExp == 0L) "Lagi puasa jajan ya? Hebat bener \uD83D\uDE31" else "Lumayan sibuk ya dompetmu bulan ini! \uD83D\uDE80", fontFamily = googleFont, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
+                                    val textEmpty = if(isId) "Lagi puasa jajan ya? Hebat bener \uD83D\uDE31" else "Fasting from spending? Absolute legend \uD83D\uDE31"
+                                    val textBusy = if(isId) "Lumayan sibuk ya dompetmu bulan ini! \uD83D\uDE80" else "Your wallet has been working overtime! \uD83D\uDE80"
+                                    Text(if (totalExp == 0L) textEmpty else textBusy, fontFamily = googleFont, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
                                 }
                                 1 -> {
-                                    Text("TOP KATEGORI", fontFamily = googleFont, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                                    Text(if(isId) "TOP KATEGORI" else "TOP CATEGORY", fontFamily = googleFont, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                                     Spacer(modifier = Modifier.height(16.dp))
-                                    Text("Ternyata, dana kamu paling deres ngalir ke...", fontFamily = googleFont, color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
+                                    Text(if(isId) "Ternyata, dana kamu paling deres ngalir ke..." else "Looks like most of your cash flowed into...", fontFamily = googleFont, color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
                                     Spacer(modifier = Modifier.height(24.dp))
                                     Text(topCategory.uppercase(), fontFamily = googleFont, fontSize = 42.sp, fontWeight = FontWeight.Black, color = pageColor, textAlign = TextAlign.Center, lineHeight = 48.sp)
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text("$curSym ${NumberFormat.getInstance(locale).format(topCatAmount)}", fontFamily = googleFont, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.height(24.dp))
-                                    Text("Asal bikin happy, sesekali gapapa dong! ✨", fontFamily = googleFont, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
+                                    Text(if(isId) "Asal bikin happy, sesekali gapapa dong! ✨" else "Hey, as long as it brings joy, right? ✨", fontFamily = googleFont, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
                                 }
                                 2 -> {
-                                    Text("TRANSAKSI TERGILA", fontFamily = googleFont, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                                    Text(if(isId) "TRANSAKSI TERGILA" else "CRAZIEST SPEND", fontFamily = googleFont, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                                     Spacer(modifier = Modifier.height(16.dp))
-                                    Text("Momen pengeluaran paling brutal jatuh kepada...", fontFamily = googleFont, color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
+                                    Text(if(isId) "Momen pengeluaran paling brutal jatuh kepada..." else "The most brutal damage to your balance goes to...", fontFamily = googleFont, color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
                                     Spacer(modifier = Modifier.height(24.dp))
-                                    Text(biggestTx?.name ?: "Kosong", fontFamily = googleFont, fontSize = 32.sp, fontWeight = FontWeight.Black, color = pageColor, textAlign = TextAlign.Center, lineHeight = 36.sp)
+                                    Text(biggestTx?.name ?: if(isId) "Kosong" else "Nothing", fontFamily = googleFont, fontSize = 32.sp, fontWeight = FontWeight.Black, color = pageColor, textAlign = TextAlign.Center, lineHeight = 36.sp)
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text("$curSym ${NumberFormat.getInstance(locale).format(biggestTx?.amount?.toLongOrNull() ?: 0L)}", fontFamily = googleFont, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.height(24.dp))
-                                    Text("Semoga beneran kepake dan worth it ya! \uD83D\uDE4F", fontFamily = googleFont, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
+                                    Text(if(isId) "Semoga beneran kepake dan worth it ya! \uD83D\uDE4F" else "Let's hope this was actually worth it! \uD83D\uDE4F", fontFamily = googleFont, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
                                 }
                                 3 -> {
-                                    Text("PAHLAWAN PEMASUKAN", fontFamily = googleFont, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                                    Text(if(isId) "PAHLAWAN PEMASUKAN" else "INCOME SAVIOR", fontFamily = googleFont, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                                     Spacer(modifier = Modifier.height(16.dp))
-                                    Text("Kabar baiknya, ada rezeki nomplok dari...", fontFamily = googleFont, color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
+                                    Text(if(isId) "Kabar baiknya, ada rezeki nomplok dari..." else "The good news is, you got a solid injection from...", fontFamily = googleFont, color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
                                     Spacer(modifier = Modifier.height(24.dp))
-                                    Text(biggestInc?.name ?: "Belum ada rejeki", fontFamily = googleFont, fontSize = 32.sp, fontWeight = FontWeight.Black, color = pageColor, textAlign = TextAlign.Center, lineHeight = 36.sp)
+                                    Text(biggestInc?.name ?: if(isId) "Belum ada rejeki" else "No income yet", fontFamily = googleFont, fontSize = 32.sp, fontWeight = FontWeight.Black, color = pageColor, textAlign = TextAlign.Center, lineHeight = 36.sp)
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text("$curSym ${NumberFormat.getInstance(locale).format(biggestInc?.amount?.toLongOrNull() ?: 0L)}", fontFamily = googleFont, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.height(24.dp))
-                                    Text(if (biggestInc == null) "Bulan depan pasti ada, semangat! \uD83D\uDCAA" else "Kerja keras terbayar lunas! Lanjutkan! \uD83D\uDD25", fontFamily = googleFont, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
+                                    val textZeroInc = if(isId) "Bulan depan pasti ada, semangat! \uD83D\uDCAA" else "Next month for sure, keep grinding! \uD83D\uDCAA"
+                                    val textHasInc = if(isId) "Kerja keras terbayar lunas! Lanjutkan! \uD83D\uDD25" else "Hard work paid off! Keep it burning! \uD83D\uDD25"
+                                    Text(if (biggestInc == null) textZeroInc else textHasInc, fontFamily = googleFont, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
                                 }
                                 4 -> {
                                     Text("FINANCIAL PERSONA", fontFamily = googleFont, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                                     Spacer(modifier = Modifier.height(16.dp))
-                                    Text("Berdasarkan gaya jajanmu, gelar yang paling cocok buat kamu adalah...", fontFamily = googleFont, color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
+                                    Text(if(isId) "Berdasarkan gaya jajanmu, gelar yang paling cocok buat kamu adalah..." else "Based on your habits, your ultimate financial title is...", fontFamily = googleFont, color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
                                     Spacer(modifier = Modifier.height(24.dp))
                                     Text(persona, fontFamily = googleFont, fontSize = 36.sp, fontWeight = FontWeight.Black, color = pageColor, textAlign = TextAlign.Center, lineHeight = 42.sp)
                                     Spacer(modifier = Modifier.height(24.dp))
-                                    Text("Kira-kira bulan depan gelarnya bakal berubah kaga nih? \uD83E\uDD14", fontFamily = googleFont, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
+                                    Text(if(isId) "Kira-kira bulan depan gelarnya bakal berubah kaga nih? \uD83E\uDD14" else "Will this title survive until next month? \uD83E\uDD14", fontFamily = googleFont, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
                                 }
                                 5 -> {
                                     Text("THAT'S A WRAP!", fontFamily = googleFont, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
                                     Spacer(modifier = Modifier.height(24.dp))
-                                    Text("Perjalanan keuangan $monthName kamu resmi ditutup.", fontFamily = googleFont, color = Color.White, fontSize = 24.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+                                    Text(if(isId) "Perjalanan keuangan $monthName kamu resmi ditutup." else "Your financial journey for $monthName is officially closed.", fontFamily = googleFont, color = Color.White, fontSize = 24.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.height(32.dp))
 
                                     Button(
@@ -259,7 +269,7 @@ fun WrappedScreen(
                                         shape = RoundedCornerShape(16.dp),
                                         modifier = Modifier.fillMaxWidth().height(55.dp)
                                     ) {
-                                        Text("SIAP BUAT BULAN INI \uD83D\uDCAA", fontFamily = googleFont, color = Color.Black, fontWeight = FontWeight.Black, fontSize = 14.sp)
+                                        Text(if(isId) "SIAP BUAT BULAN INI \uD83D\uDCAA" else "READY FOR THIS MONTH \uD83D\uDCAA", fontFamily = googleFont, color = Color.Black, fontWeight = FontWeight.Black, fontSize = 14.sp)
                                     }
                                 }
                             }
@@ -269,7 +279,6 @@ fun WrappedScreen(
             }
         }
 
-        // --- PROGRESS BAR IG STORY DI ATAS ---
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -292,7 +301,6 @@ fun WrappedScreen(
             }
         }
 
-        // --- TOMBOL CLOSE (SILANG) ---
         IconButton(
             onClick = onClose,
             modifier = Modifier
