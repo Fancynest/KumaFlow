@@ -1,8 +1,12 @@
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.Canvas
+package com.bearbones.kumaflow
+
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -17,22 +21,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
+import kotlin.math.absoluteValue
 
 @Composable
 fun WrappedScreen(
     profile: UserProfile,
-    prevMonthTransactions: List<KumaTransaction>, // Kirim data transaksi bulan kemaren ke sini
-    monthName: String, // Contoh: "Mei 2026"
-    onClose: () -> Unit // Pas ditutup, update sharedprefs di MainActivity
+    prevMonthTransactions: List<KumaTransaction>,
+    monthName: String,
+    onClose: () -> Unit
 ) {
     val locale = Locale.forLanguageTag("id-ID")
     val curSym = when(profile.currency) {
@@ -43,6 +51,11 @@ fun WrappedScreen(
         "CHF" -> "CHF"
         else -> "Rp"
     }
+
+    // 🔥 VARIABEL FONT (Udah disiapin biar gampang) 🔥
+    // Nanti kalau lu udah dapet file googlesans.ttf dan ditaruh di folder res/font,
+    // lu tinggal ganti jadi: val googleFont = FontFamily(Font(R.font.googlesans))
+    val googleFont = FontFamily.SansSerif
 
     // --- KALKULASI DATA WRAPPED ---
     val expenses = prevMonthTransactions.filter { !it.isIncome }
@@ -66,23 +79,21 @@ fun WrappedScreen(
         else -> "Si Paling Bijak \uD83E\uDD13"
     }
 
-    // --- LOGIKA IG STORY (PAGER & TIMER) ---
+    // --- LOGIKA IG STORY ---
     val pages = 6
     val pagerState = rememberPagerState(pageCount = { pages })
     val coroutineScope = rememberCoroutineScope()
 
     var isPaused by remember { mutableStateOf(false) }
-    var progressAnimation by remember { mutableStateOf(0f) }
+    val progressAnim = remember { Animatable(0f) }
 
     LaunchedEffect(pagerState.currentPage, isPaused) {
-        progressAnimation = 0f
         if (!isPaused) {
-            val animationDuration = 5000L // 5 detik per slide
-            val startTime = System.currentTimeMillis()
-            while (System.currentTimeMillis() - startTime < animationDuration) {
-                delay(16) // ~60fps refresh rate
-                progressAnimation = (System.currentTimeMillis() - startTime) / animationDuration.toFloat()
-            }
+            progressAnim.snapTo(0f)
+            progressAnim.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 5000, easing = LinearEasing)
+            )
             if (pagerState.currentPage < pages - 1) {
                 pagerState.animateScrollToPage(pagerState.currentPage + 1)
             }
@@ -90,19 +101,28 @@ fun WrappedScreen(
     }
 
     val neonColors = listOf(
-        Color(0xFFFF0055), // Neon Pink
-        Color(0xFF00FFCC), // Neon Cyan
-        Color(0xFFFFD500), // Neon Yellow
-        Color(0xFF00FF33), // Neon Green
-        Color(0xFFB000FF), // Neon Purple
-        Color(0xFFFF5500)  // Neon Orange
+        Color(0xFFFF0055), // Pink
+        Color(0xFF00FFCC), // Cyan
+        Color(0xFFFFD500), // Yellow
+        Color(0xFF00FF33), // Green
+        Color(0xFFB000FF), // Purple
+        Color(0xFFFF5500)  // Orange
     )
 
-    // --- UI UTAMA WRAPPED ---
+    // DAFTAR GAMBAR BACKGROUND
+    val bgImages = listOf(
+        R.drawable.bg_slide_1,
+        R.drawable.bg_slide_2,
+        R.drawable.bg_slide_3,
+        R.drawable.bg_slide_4,
+        R.drawable.bg_slide_5,
+        R.drawable.bg_slide_6
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black) // Vibe AMOLED Dark
+            .background(Color.Black)
     ) {
         HorizontalPager(
             state = pagerState,
@@ -111,13 +131,12 @@ fun WrappedScreen(
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onPress = {
-                            isPaused = true // Kalo layar ditahan, timer pause
+                            isPaused = true
                             tryAwaitRelease()
                             isPaused = false
                         },
                         onTap = { offset ->
                             coroutineScope.launch {
-                                // Tap kiri = mundur, Tap kanan = maju
                                 if (offset.x < size.width / 3) {
                                     if (pagerState.currentPage > 0) pagerState.animateScrollToPage(pagerState.currentPage - 1)
                                 } else {
@@ -128,92 +147,120 @@ fun WrappedScreen(
                     )
                 }
         ) { page ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                // KARTU NEO-BRUTALISM + GLASSMORPHISM
-                val activeNeon = neonColors[page % neonColors.size]
 
-                Card(
+            val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
+
+            Box(modifier = Modifier.fillMaxSize()) {
+                // GAMBAR BACKGROUND
+                Image(
+                    painter = painterResource(id = bgImages[page % bgImages.size]),
+                    contentDescription = "Background Slide $page",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                // FILTER GELAP DI LATAR BELAKANG BIAR CARD LEBIH POP OUT
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .wrapContentHeight()
-                        .border(4.dp, activeNeon, RoundedCornerShape(32.dp)),
-                    colors = CardDefaults.cardColors(containerColor = Color(0x22FFFFFF)), // Transparan efek kaca
-                    shape = RoundedCornerShape(32.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        when (page) {
-                            0 -> {
-                                Text("BULAN INI", fontSize = 16.sp, color = Color.White.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text("Kamu udah ngeluarin duit sebanyak...", color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Text("$curSym ${NumberFormat.getInstance(locale).format(totalExp)}", fontSize = 42.sp, fontWeight = FontWeight.Black, color = activeNeon, textAlign = TextAlign.Center, lineHeight = 48.sp)
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Text("Lumayan sibuk ya dompetmu bulan ini! \uD83D\uDE80", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
-                            }
-                            1 -> {
-                                Text("TOP KATEGORI", fontSize = 16.sp, color = Color.White.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text("Ternyata, dana kamu paling deres ngalir ke...", color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Text(topCategory.uppercase(), fontSize = 48.sp, fontWeight = FontWeight.Black, color = activeNeon, textAlign = TextAlign.Center)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text("$curSym ${NumberFormat.getInstance(locale).format(topCatAmount)}", fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Text("Asal bikin happy, sesekali gapapa dong! ✨", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
-                            }
-                            2 -> {
-                                Text("TRANSAKSI TERGILA", fontSize = 16.sp, color = Color.White.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text("Momen pengeluaran paling brutal jatuh kepada...", color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Text(biggestTx?.name ?: "Kosong", fontSize = 32.sp, fontWeight = FontWeight.Black, color = activeNeon, textAlign = TextAlign.Center, lineHeight = 36.sp)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text("$curSym ${NumberFormat.getInstance(locale).format(biggestTx?.amount?.toLongOrNull() ?: 0L)}", fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Text("Semoga beneran kepake dan worth it ya! \uD83D\uDE4F", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
-                            }
-                            3 -> {
-                                Text("PAHLAWAN PEMASUKAN", fontSize = 16.sp, color = Color.White.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text("Kabar baiknya, ada rezeki nomplok dari...", color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Text(biggestInc?.name ?: "Belum ada rejeki", fontSize = 32.sp, fontWeight = FontWeight.Black, color = activeNeon, textAlign = TextAlign.Center, lineHeight = 36.sp)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text("$curSym ${NumberFormat.getInstance(locale).format(biggestInc?.amount?.toLongOrNull() ?: 0L)}", fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Text("Kerja keras terbayar lunas! Lanjutkan! \uD83D\uDD25", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
-                            }
-                            4 -> {
-                                Text("FINANCIAL PERSONA", fontSize = 16.sp, color = Color.White.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text("Berdasarkan gaya jajanmu, gelar yang paling cocok buat kamu adalah...", color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Text(persona, fontSize = 36.sp, fontWeight = FontWeight.Black, color = activeNeon, textAlign = TextAlign.Center, lineHeight = 42.sp)
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Text("Kira-kira bulan depan gelarnya bakal berubah kaga nih? \uD83E\uDD14", color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
-                            }
-                            5 -> {
-                                Text("THAT'S A WRAP!", fontSize = 16.sp, color = Color.White.copy(alpha = 0.7f), fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Text("Perjalanan keuangan $monthName kamu resmi ditutup.", color = Color.White, fontSize = 24.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(32.dp))
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.4f))
+                )
 
-                                Button(
-                                    onClick = onClose,
-                                    colors = ButtonDefaults.buttonColors(containerColor = activeNeon),
-                                    shape = RoundedCornerShape(16.dp),
-                                    modifier = Modifier.fillMaxWidth().height(55.dp)
-                                ) {
-                                    Text("SIAP BUAT BULAN INI \uD83D\uDCAA", color = Color.Black, fontWeight = FontWeight.Black, fontSize = 16.sp)
+                // KONTEN KARTU
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp)
+                        .graphicsLayer {
+                            val scale = 1f - (pageOffset * 0.15f).coerceIn(0f, 0.2f)
+                            val alphaFade = 1f - (pageOffset * 1.5f).coerceIn(0f, 1f)
+                            scaleX = scale
+                            scaleY = scale
+                            alpha = alphaFade
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    val pageColor = neonColors[page % neonColors.size]
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .wrapContentHeight()
+                            .border(2.dp, pageColor, RoundedCornerShape(32.dp)),
+                        // 🔥 INI FIX-NYA: Warna Card jadi Item Solid, kaga transparan lagi! 🔥
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A)),
+                        shape = RoundedCornerShape(32.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            when (page) {
+                                0 -> {
+                                    Text("BULAN INI", fontFamily = googleFont, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("Kamu udah ngeluarin duit sebanyak...", fontFamily = googleFont, color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                    Text("$curSym ${NumberFormat.getInstance(locale).format(totalExp)}", fontFamily = googleFont, fontSize = 42.sp, fontWeight = FontWeight.Black, color = pageColor, textAlign = TextAlign.Center, lineHeight = 48.sp)
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                    Text(if (totalExp == 0L) "Lagi puasa jajan ya? Hebat bener \uD83D\uDE31" else "Lumayan sibuk ya dompetmu bulan ini! \uD83D\uDE80", fontFamily = googleFont, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
+                                }
+                                1 -> {
+                                    Text("TOP KATEGORI", fontFamily = googleFont, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("Ternyata, dana kamu paling deres ngalir ke...", fontFamily = googleFont, color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                    Text(topCategory.uppercase(), fontFamily = googleFont, fontSize = 42.sp, fontWeight = FontWeight.Black, color = pageColor, textAlign = TextAlign.Center, lineHeight = 48.sp)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("$curSym ${NumberFormat.getInstance(locale).format(topCatAmount)}", fontFamily = googleFont, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                    Text("Asal bikin happy, sesekali gapapa dong! ✨", fontFamily = googleFont, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
+                                }
+                                2 -> {
+                                    Text("TRANSAKSI TERGILA", fontFamily = googleFont, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("Momen pengeluaran paling brutal jatuh kepada...", fontFamily = googleFont, color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                    Text(biggestTx?.name ?: "Kosong", fontFamily = googleFont, fontSize = 32.sp, fontWeight = FontWeight.Black, color = pageColor, textAlign = TextAlign.Center, lineHeight = 36.sp)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("$curSym ${NumberFormat.getInstance(locale).format(biggestTx?.amount?.toLongOrNull() ?: 0L)}", fontFamily = googleFont, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                    Text("Semoga beneran kepake dan worth it ya! \uD83D\uDE4F", fontFamily = googleFont, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
+                                }
+                                3 -> {
+                                    Text("PAHLAWAN PEMASUKAN", fontFamily = googleFont, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("Kabar baiknya, ada rezeki nomplok dari...", fontFamily = googleFont, color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                    Text(biggestInc?.name ?: "Belum ada rejeki", fontFamily = googleFont, fontSize = 32.sp, fontWeight = FontWeight.Black, color = pageColor, textAlign = TextAlign.Center, lineHeight = 36.sp)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("$curSym ${NumberFormat.getInstance(locale).format(biggestInc?.amount?.toLongOrNull() ?: 0L)}", fontFamily = googleFont, fontSize = 24.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                    Text(if (biggestInc == null) "Bulan depan pasti ada, semangat! \uD83D\uDCAA" else "Kerja keras terbayar lunas! Lanjutkan! \uD83D\uDD25", fontFamily = googleFont, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
+                                }
+                                4 -> {
+                                    Text("FINANCIAL PERSONA", fontFamily = googleFont, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("Berdasarkan gaya jajanmu, gelar yang paling cocok buat kamu adalah...", fontFamily = googleFont, color = Color.White, fontSize = 20.sp, textAlign = TextAlign.Center)
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                    Text(persona, fontFamily = googleFont, fontSize = 36.sp, fontWeight = FontWeight.Black, color = pageColor, textAlign = TextAlign.Center, lineHeight = 42.sp)
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                    Text("Kira-kira bulan depan gelarnya bakal berubah kaga nih? \uD83E\uDD14", fontFamily = googleFont, color = Color.White.copy(alpha = 0.8f), fontSize = 14.sp, textAlign = TextAlign.Center)
+                                }
+                                5 -> {
+                                    Text("THAT'S A WRAP!", fontFamily = googleFont, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                                    Spacer(modifier = Modifier.height(24.dp))
+                                    Text("Perjalanan keuangan $monthName kamu resmi ditutup.", fontFamily = googleFont, color = Color.White, fontSize = 24.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(32.dp))
+
+                                    Button(
+                                        onClick = onClose,
+                                        colors = ButtonDefaults.buttonColors(containerColor = pageColor),
+                                        shape = RoundedCornerShape(16.dp),
+                                        modifier = Modifier.fillMaxWidth().height(55.dp)
+                                    ) {
+                                        Text("SIAP BUAT BULAN INI \uD83D\uDCAA", fontFamily = googleFont, color = Color.Black, fontWeight = FontWeight.Black, fontSize = 14.sp)
+                                    }
                                 }
                             }
                         }
@@ -233,14 +280,14 @@ fun WrappedScreen(
                 LinearProgressIndicator(
                     progress = {
                         when {
-                            i < pagerState.currentPage -> 1f // Kalo udah kelewat, full 100%
-                            i == pagerState.currentPage -> progressAnimation // Slide yg lagi jalan
-                            else -> 0f // Slide belum kebuka
+                            i < pagerState.currentPage -> 1f
+                            i == pagerState.currentPage -> progressAnim.value
+                            else -> 0f
                         }
                     },
                     modifier = Modifier.weight(1f).height(3.dp).clip(CircleShape),
                     color = Color.White,
-                    trackColor = Color.White.copy(alpha = 0.2f)
+                    trackColor = Color.White.copy(alpha = 0.3f)
                 )
             }
         }

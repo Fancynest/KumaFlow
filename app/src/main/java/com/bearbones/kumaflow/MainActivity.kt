@@ -743,7 +743,6 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Reset refresh rate biar smooth
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             val display = windowManager.defaultDisplay
             val modes = display.supportedModes
@@ -755,7 +754,6 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        // Izin notifikasi buat Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 androidx.core.app.ActivityCompat.requestPermissions(
@@ -766,31 +764,12 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        // --- INI KODINGAN BARU BUAT AUTO-RESCHEDULE ALARM ---
-        // Biar alarm gak mati pas abis install/restore
-        /*
-        CoroutineScope(Dispatchers.IO).launch {
-
-            try {
-                val db = KumaDatabase.getDatabase(this@MainActivity)
-                val profile = db.transactionDao().getUserProfile().firstOrNull()
-                if (profile != null && profile.isReminderOn) {
-                    scheduleKumaReminders(this@MainActivity, profile)
-                }
-            } catch (e: Exception) {
-                // Silent fail, biar gak crash pas database belum siap
-            }
-        }
-            */
-
-        // --- INI KODINGAN BARU BUAT NYALAIN FOREGROUND SERVICE ---
         val serviceIntent = Intent(this, KumaService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(serviceIntent)
         } else {
             startService(serviceIntent)
         }
-        // ----------------------------------------------------
 
         setContent {
             val context = LocalContext.current
@@ -798,12 +777,12 @@ class MainActivity : FragmentActivity() {
             val dao = db.transactionDao()
             val userProfile by dao.getUserProfile().collectAsState(initial = null)
 
-            // --- STATE BUAT WRAPPED ---
             val sharedPrefs = remember { context.getSharedPreferences("kumaflow_prefs", android.content.Context.MODE_PRIVATE) }
-            var showWrapped by remember { mutableStateOf(false) }
 
-            // 🔥 INI TRIGGER EASTER EGG-NYA, TARUH DI SINI 🔥
-            androidx.compose.runtime.LaunchedEffect(userProfile?.userName) {
+            // 🔥 STATE BARU BUAT NANGKEP BULAN & TAHUN 🔥
+            var wrappedTarget by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+
+            LaunchedEffect(userProfile?.userName) {
                 checkAndApplyPrideEasterEgg(context, userProfile?.userName)
             }
 
@@ -812,21 +791,18 @@ class MainActivity : FragmentActivity() {
             val systemDark = isSystemInDarkTheme()
             val isAmoled = userProfile?.isAmoledMode == true
 
-            // --- LOGIKA EASTER EGG TEMA ---
             val currentMonth = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH)
             val isJune = currentMonth == java.util.Calendar.JUNE
             val isPrideTriggered = userProfile?.userName?.contains("#pride", ignoreCase = true) == true
             val isBearTriggered = userProfile?.userName?.contains("#bear", ignoreCase = true) == true
 
-            // Cegah nyangkut di tema rahasia kalau udah lewat bulan Juni
             val activeThemeMode = if (isJune) userProfile?.themeMode ?: 0 else {
                 if ((userProfile?.themeMode ?: 0) > 2) 0 else userProfile?.themeMode ?: 0
             }
 
-            // Atur status Dark Mode biar nyesuaiin ID tema
             val isDark = when(activeThemeMode) {
-                1, 3, 5 -> false // 1: Light Kuma, 3: Pride Light, 5: Bear Light
-                2, 4, 6 -> true  // 2: Dark Kuma, 4: Pride Dark, 6: Bear Dark
+                1, 3, 5 -> false
+                2, 4, 6 -> true
                 else -> systemDark
             }
 
@@ -834,64 +810,13 @@ class MainActivity : FragmentActivity() {
                 LocalIsDark provides isDark,
                 LocalIsAmoled provides isAmoled
             ) {
-                // --- TRUE COLOR PALETTE ---
                 val colorScheme = when {
-                    isPrideTriggered && activeThemeMode == 3 -> {
-                        // PRIDE LIGHT 🏳️‍🌈
-                        lightColorScheme(
-                            background = Color(0xFFFCE4EC), surface = Color(0xFFF8BBD0),
-                            primary = Color(0xFFD81B60), onPrimary = Color.White,
-                            onBackground = Color(0xFF212121), onSurface = Color(0xFF212121)
-                        )
-                    }
-                    isPrideTriggered && activeThemeMode == 4 -> {
-                        // PRIDE DARK 🏳️‍🌈
-                        darkColorScheme(
-                            background = Color(0xFF121212), surface = Color(0xFF263238),
-                            primary = Color(0xFFAA00FF), onPrimary = Color.White,
-                            onBackground = Color.White, onSurface = Color.White
-                        )
-                    }
-                    isBearTriggered && activeThemeMode == 5 -> {
-                        // BEAR LIGHT 🐻
-                        lightColorScheme(
-                            background = Color(0xFFFFF3E0), surface = Color(0xFFFFE0B2),
-                            primary = Color(0xFFBF360C), onPrimary = Color.White,
-                            onBackground = Color(0xFF3E2723), onSurface = Color(0xFF3E2723)
-                        )
-                    }
-                    isBearTriggered && activeThemeMode == 6 -> {
-                        // BEAR DARK 🐻
-                        darkColorScheme(
-                            background = Color(0xFF3E2723), surface = Color(0xFF4E342E),
-                            primary = Color(0xFFFFCA28), onPrimary = Color.Black,
-                            onBackground = Color(0xFFEFEBE9), onSurface = Color(0xFFEFEBE9)
-                        )
-                    }
-                    isDark -> {
-                        // ORIGINAL DARK / AMOLED KUMAFLOW
-                        if (isAmoled) {
-                            darkColorScheme(
-                                background = Color(0xFF000000), surface = Color(0xFF0F0F0F),
-                                onBackground = Color(0xFFE0E0E0), onSurface = Color(0xFFE0E0E0),
-                                primary = Color(0xFFD5641C), onPrimary = Color.White
-                            )
-                        } else {
-                            darkColorScheme(
-                                background = Color(0xFF121212), surface = Color(0xFF1E1E1E),
-                                onBackground = Color(0xFFE0E0E0), onSurface = Color(0xFFE0E0E0),
-                                primary = Color(0xFFD5641C), onPrimary = Color.White
-                            )
-                        }
-                    }
-                    else -> {
-                        // ORIGINAL LIGHT KUMAFLOW
-                        lightColorScheme(
-                            background = Color(0xFFD9D2C5), surface = Color(0xFFC7BCAC),
-                            onBackground = Color(0xFF4A2F1D), onSurface = Color(0xFF4A2F1D),
-                            primary = Color(0xFF4A2F1D), onPrimary = Color.White
-                        )
-                    }
+                    isPrideTriggered && activeThemeMode == 3 -> lightColorScheme(background = Color(0xFFFCE4EC), surface = Color(0xFFF8BBD0), primary = Color(0xFFD81B60), onPrimary = Color.White, onBackground = Color(0xFF212121), onSurface = Color(0xFF212121))
+                    isPrideTriggered && activeThemeMode == 4 -> darkColorScheme(background = Color(0xFF121212), surface = Color(0xFF263238), primary = Color(0xFFAA00FF), onPrimary = Color.White, onBackground = Color.White, onSurface = Color.White)
+                    isBearTriggered && activeThemeMode == 5 -> lightColorScheme(background = Color(0xFFFFF3E0), surface = Color(0xFFFFE0B2), primary = Color(0xFFBF360C), onPrimary = Color.White, onBackground = Color(0xFF3E2723), onSurface = Color(0xFF3E2723))
+                    isBearTriggered && activeThemeMode == 6 -> darkColorScheme(background = Color(0xFF3E2723), surface = Color(0xFF4E342E), primary = Color(0xFFFFCA28), onPrimary = Color.Black, onBackground = Color(0xFFEFEBE9), onSurface = Color(0xFFEFEBE9))
+                    isDark -> if (isAmoled) darkColorScheme(background = Color(0xFF000000), surface = Color(0xFF0F0F0F), onBackground = Color(0xFFE0E0E0), onSurface = Color(0xFFE0E0E0), primary = Color(0xFFD5641C), onPrimary = Color.White) else darkColorScheme(background = Color(0xFF121212), surface = Color(0xFF1E1E1E), onBackground = Color(0xFFE0E0E0), onSurface = Color(0xFFE0E0E0), primary = Color(0xFFD5641C), onPrimary = Color.White)
+                    else -> lightColorScheme(background = Color(0xFFD9D2C5), surface = Color(0xFFC7BCAC), onBackground = Color(0xFF4A2F1D), onSurface = Color(0xFF4A2F1D), primary = Color(0xFF4A2F1D), onPrimary = Color.White)
                 }
 
                 MaterialTheme(colorScheme = colorScheme) {
@@ -900,52 +825,52 @@ class MainActivity : FragmentActivity() {
                             isAuthenticated = true
                         }
                     } else {
-                        Surface(
-                            modifier = Modifier.fillMaxSize(),
-                            color = MaterialTheme.colorScheme.background
-                        ) {
-                            // BUNGKUS PAKAI BOX BIAR BISA NUMPUK LAYAR
+                        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                             Box(modifier = Modifier.fillMaxSize()) {
 
-                                // Karena lu nge-pass logic ke MainScreen, lu wajib nambahin parameter
-                                // onOpenWrapped di dalem fungsi MainScreen lu ntar ya biar nyambung ke HomeScreen!
                                 MainScreen(
-                                    profile = userProfile,
+                                    userProfileState = userProfile,
                                     dao = dao,
-                                    onOpenWrapped = { showWrapped = true } // Menerima trigger klik dari HomeScreen
+                                    onOpenWrapped = { m, y -> wrappedTarget = Pair(m, y) }
                                 )
 
                                 NewUserAnnouncementDialog()
 
-                                // 🔥 LAPISAN TERATAS (Z-INDEX TERTINGGI): WRAPPED SCREEN 🔥
-                                if (showWrapped && userProfile != null) {
-                                    // Tarik data buat WrappedScreen
+                                // 🔥 LOGIKA WRAPPED DINAMIS 🔥
+                                if (wrappedTarget != null && userProfile != null) {
+                                    val targetMonth = wrappedTarget!!.first
+                                    val targetYear = wrappedTarget!!.second
                                     val allTxs by dao.getAllTransactionsWithSplits().collectAsState(initial = emptyList())
 
                                     val cal = java.util.Calendar.getInstance()
-                                    cal.add(java.util.Calendar.MONTH, -1)
-                                    val prevMonth = cal.get(java.util.Calendar.MONTH) + 1
-                                    val prevYear = cal.get(java.util.Calendar.YEAR)
-                                    val prevMonthName = cal.getDisplayName(java.util.Calendar.MONTH, java.util.Calendar.LONG, java.util.Locale.forLanguageTag("id-ID")) ?: ""
+                                    cal.set(java.util.Calendar.MONTH, targetMonth - 1)
+                                    cal.set(java.util.Calendar.YEAR, targetYear)
+                                    val targetMonthName = cal.getDisplayName(java.util.Calendar.MONTH, java.util.Calendar.LONG, java.util.Locale.forLanguageTag("id-ID")) ?: ""
 
-                                    // Saring transaksi biar cuma bulan kemaren aja yang kebaca
-                                    val prevMonthTxs = allTxs
+                                    val targetMonthTxs = allTxs
                                         .map { it.transaction }
                                         .filter { tx ->
                                             try {
                                                 val dt = java.time.LocalDateTime.parse(tx.timestamp, java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                                                dt.monthValue == prevMonth && dt.year == prevYear
+                                                dt.monthValue == targetMonth && dt.year == targetYear
                                             } catch (e: Exception) { false }
                                         }
 
                                     WrappedScreen(
                                         profile = userProfile!!,
-                                        prevMonthTransactions = prevMonthTxs,
-                                        monthName = "$prevMonthName $prevYear",
+                                        prevMonthTransactions = targetMonthTxs,
+                                        monthName = "$targetMonthName $targetYear",
                                         onClose = {
-                                            showWrapped = false
-                                            // Update flag biar banner di HomeScreen lenyap
-                                            sharedPrefs.edit().putString("last_viewed_wrapped", "$prevMonth-$prevYear").apply()
+                                            wrappedTarget = null
+                                            val todayCal = java.util.Calendar.getInstance()
+                                            todayCal.add(java.util.Calendar.MONTH, -1)
+                                            val pMonth = todayCal.get(java.util.Calendar.MONTH) + 1
+                                            val pYear = todayCal.get(java.util.Calendar.YEAR)
+
+                                            // Cuma ngilangin banner kalau yang dibuka beneran bulan lalu
+                                            if (targetMonth == pMonth && targetYear == pYear) {
+                                                sharedPrefs.edit().putString("last_viewed_wrapped", "$pMonth-$pYear").apply()
+                                            }
                                         }
                                     )
                                 }
@@ -955,35 +880,26 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
-
 @Composable
 fun MainScreen(
     userProfileState: UserProfile?,
     dao: TransactionDao,
-    onOpenWrapped: () -> Unit = {} // 🔥 Tambahin parameter ini buat nerima klik dari Home
+    onOpenWrapped: (Int, Int) -> Unit = { _, _ -> } // 🔥 UPDATE PARAMETER
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-
     val haptic = LocalHapticFeedback.current
     val pagerState = rememberPagerState(pageCount = { 3 })
-
     val transactionListWithSplits by dao.getAllTransactionsWithSplits().collectAsState(initial = emptyList())
     val userProfile = userProfileState ?: UserProfile(userName = "User")
     var selectedItemIndex by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(selectedItemIndex) {
-        if (pagerState.currentPage != selectedItemIndex) {
-            pagerState.animateScrollToPage(selectedItemIndex)
-        }
-    }
-    LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) {
-        if (!pagerState.isScrollInProgress) {
-            selectedItemIndex = pagerState.currentPage
-        }
-    }
+    LaunchedEffect(selectedItemIndex) { if (pagerState.currentPage != selectedItemIndex) pagerState.animateScrollToPage(selectedItemIndex) }
+    LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) { if (!pagerState.isScrollInProgress) selectedItemIndex = pagerState.currentPage }
 
     var selectedMonth by remember { mutableIntStateOf(LocalDateTime.now().monthValue) }
     var selectedYear by remember { mutableIntStateOf(LocalDateTime.now().year) }
@@ -995,9 +911,7 @@ fun MainScreen(
                 try {
                     val dt = LocalDateTime.parse(t.transaction.timestamp, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
                     dt.monthValue == selectedMonth && dt.year == selectedYear
-                } catch (e: Exception) {
-                    true
-                }
+                } catch (e: Exception) { true }
             }
         }
     }
@@ -1005,19 +919,14 @@ fun MainScreen(
     val walletBalances by remember(transactionListWithSplits, userProfile.wallets, userProfile.useCarryOver, selectedMonth, selectedYear, forceUpdateTrigger) {
         derivedStateOf {
             val balances = userProfile.wallets.split(",").filter { it.isNotBlank() }.associateWith { 0L }.toMutableMap()
-
             val relevantTxs = if (userProfile.useCarryOver) {
                 transactionListWithSplits.filter { t ->
                     try {
                         val dt = LocalDateTime.parse(t.transaction.timestamp, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
                         dt.year < selectedYear || (dt.year == selectedYear && dt.monthValue <= selectedMonth)
-                    } catch (e: Exception) {
-                        false
-                    }
+                    } catch (e: Exception) { false }
                 }
-            } else {
-                monthlyTransactionsWithSplits
-            }
+            } else monthlyTransactionsWithSplits
 
             relevantTxs.forEach { txObj ->
                 if (txObj.splits.isNotEmpty()) {
@@ -1035,26 +944,13 @@ fun MainScreen(
         }
     }
 
-    val totalBalance by remember(walletBalances, forceUpdateTrigger) {
-        derivedStateOf { walletBalances.values.sum() }
-    }
-
-    val totalIncome by remember(monthlyTransactionsWithSplits, forceUpdateTrigger) {
-        derivedStateOf {
-            monthlyTransactionsWithSplits.filter { it.transaction.isIncome }.sumOf { it.transaction.amount.toLongOrNull() ?: 0L }
-        }
-    }
-
-    val totalExpenses by remember(monthlyTransactionsWithSplits, forceUpdateTrigger) {
-        derivedStateOf {
-            monthlyTransactionsWithSplits.filter { !it.transaction.isIncome }.sumOf { it.transaction.amount.toLongOrNull() ?: 0L }
-        }
-    }
+    val totalBalance by remember(walletBalances, forceUpdateTrigger) { derivedStateOf { walletBalances.values.sum() } }
+    val totalIncome by remember(monthlyTransactionsWithSplits, forceUpdateTrigger) { derivedStateOf { monthlyTransactionsWithSplits.filter { it.transaction.isIncome }.sumOf { it.transaction.amount.toLongOrNull() ?: 0L } } }
+    val totalExpenses by remember(monthlyTransactionsWithSplits, forceUpdateTrigger) { derivedStateOf { monthlyTransactionsWithSplits.filter { !it.transaction.isIncome }.sumOf { it.transaction.amount.toLongOrNull() ?: 0L } } }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showBottomSheet by remember { mutableStateOf(false) }
     var transactionToEdit by remember { mutableStateOf<TransactionWithSplits?>(null) }
-
     var showBackupReminder by remember { mutableStateOf(false) }
     val totalTxCount = transactionListWithSplits.size
 
@@ -1063,122 +959,50 @@ fun MainScreen(
         floatingActionButton = {
             if (selectedItemIndex != 2) {
                 FloatingActionButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        transactionToEdit = null
-                        showBottomSheet = true
-                    },
-                    containerColor = AppPrimary(),
-                    contentColor = Color.White,
-                    shape = CircleShape,
-                    modifier = Modifier.size(70.dp)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(40.dp))
-                }
+                    onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); transactionToEdit = null; showBottomSheet = true },
+                    containerColor = AppPrimary(), contentColor = Color.White, shape = CircleShape, modifier = Modifier.size(70.dp)
+                ) { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(40.dp)) }
             }
         },
-        bottomBar = {
-            CustomBottomNav(selectedItemIndex, haptic) { selectedItemIndex = it }
-        }
+        bottomBar = { CustomBottomNav(selectedItemIndex, haptic) { selectedItemIndex = it } }
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize()
-            ) { page ->
+            HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                 when (page) {
                     0 -> HomeScreen(
-                        profile = userProfile,
-                        transactionsWithSplits = monthlyTransactionsWithSplits,
-                        balance = totalBalance,
-                        walletBalances = walletBalances,
-                        income = totalIncome,
-                        expenses = totalExpenses,
-                        selectedMonth = selectedMonth,
-                        selectedYear = selectedYear,
-                        onMonthChange = { m, y ->
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            selectedMonth = m
-                            selectedYear = y
-                        },
-                        onEdit = { t ->
-                            transactionToEdit = t
-                            showBottomSheet = true
-                        },
-                        onDelete = { t ->
-                            scope.launch {
-                                dao.deleteTransaction(t.transaction)
-                                updateKumaWidget(context)
-                            }
-                        },
-                        onOpenWrapped = onOpenWrapped // 🔥 Teruskan ke HomeScreen
+                        profile = userProfile, transactionsWithSplits = monthlyTransactionsWithSplits, balance = totalBalance, walletBalances = walletBalances, income = totalIncome, expenses = totalExpenses, selectedMonth = selectedMonth, selectedYear = selectedYear,
+                        onMonthChange = { m, y -> haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); selectedMonth = m; selectedYear = y },
+                        onEdit = { t -> transactionToEdit = t; showBottomSheet = true },
+                        onDelete = { t -> scope.launch { dao.deleteTransaction(t.transaction); updateKumaWidget(context) } },
+                        onOpenWrapped = onOpenWrapped
                     )
                     1 -> ReportScreen(
-                        profile = userProfile,
-                        monthlyTransactions = monthlyTransactionsWithSplits.map { it.transaction },
-                        allTransactions = transactionListWithSplits.map { it.transaction },
-                        income = totalIncome,
-                        expenses = totalExpenses,
-                        balance = totalBalance,
-                        selectedMonth = selectedMonth,
-                        selectedYear = selectedYear,
-                        onMonthChange = { m, y ->
-                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            selectedMonth = m
-                            selectedYear = y
-                        }
+                        profile = userProfile, monthlyTransactions = monthlyTransactionsWithSplits.map { it.transaction }, allTransactions = transactionListWithSplits.map { it.transaction }, income = totalIncome, expenses = totalExpenses, balance = totalBalance, selectedMonth = selectedMonth, selectedYear = selectedYear,
+                        onMonthChange = { m, y -> haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); selectedMonth = m; selectedYear = y },
+                        onOpenWrapped = onOpenWrapped
                     )
                     2 -> SettingsScreen(
-                        currentProfile = userProfile,
-                        monthlyTransactionsWithSplits = monthlyTransactionsWithSplits,
-                        allTransactionsWithSplits = transactionListWithSplits,
-                        dao = dao,
-                        selectedMonth = selectedMonth,
-                        selectedYear = selectedYear,
-                        onForceUpdate = {
-                            forceUpdateTrigger++
-                            updateKumaWidget(context)
-                        }
+                        currentProfile = userProfile, monthlyTransactionsWithSplits = monthlyTransactionsWithSplits, allTransactionsWithSplits = transactionListWithSplits, dao = dao, selectedMonth = selectedMonth, selectedYear = selectedYear,
+                        onForceUpdate = { forceUpdateTrigger++; updateKumaWidget(context) }
                     )
                 }
             }
         }
 
         if (showBottomSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showBottomSheet = false },
-                sheetState = sheetState,
-                containerColor = AppBg()
-            ) {
+            ModalBottomSheet(onDismissRequest = { showBottomSheet = false }, sheetState = sheetState, containerColor = AppBg()) {
                 TransactionBottomSheet(
-                    profile = userProfile,
-                    transactionToEdit = transactionToEdit,
-                    onDismiss = { showBottomSheet = false },
+                    profile = userProfile, transactionToEdit = transactionToEdit, onDismiss = { showBottomSheet = false },
                     onSave = { txList ->
                         scope.launch {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            txList.forEach { (newTrans, splits) ->
-                                if (newTrans.id == 0) {
-                                    dao.insertFullTransaction(newTrans, splits)
-                                } else {
-                                    dao.updateFullTransaction(newTrans, splits)
-                                }
-                            }
-                            if ((totalTxCount + txList.size) % 10 == 0) {
-                                showBackupReminder = true
-                            }
-                            forceUpdateTrigger++
-                            updateKumaWidget(context)
+                            txList.forEach { (newTrans, splits) -> if (newTrans.id == 0) dao.insertFullTransaction(newTrans, splits) else dao.updateFullTransaction(newTrans, splits) }
+                            if ((totalTxCount + txList.size) % 10 == 0) showBackupReminder = true
+                            forceUpdateTrigger++; updateKumaWidget(context)
                             Toast.makeText(context, AppStr.txSaved, Toast.LENGTH_SHORT).show()
                         }
                     },
-                    onUpdateProfile = { updatedProfile ->
-                        scope.launch {
-                            dao.saveProfile(updatedProfile)
-                            forceUpdateTrigger++
-                            updateKumaWidget(context)
-                        }
-                    }
+                    onUpdateProfile = { updatedProfile -> scope.launch { dao.saveProfile(updatedProfile); forceUpdateTrigger++; updateKumaWidget(context) } }
                 )
             }
         }
@@ -1190,20 +1014,12 @@ fun MainScreen(
                 text = { Text(AppStr.backupReminderMsg) },
                 confirmButton = {
                     Button(
-                        onClick = {
-                            showBackupReminder = false
-                            backupAppToJSON(context, userProfile, transactionListWithSplits)
-                        },
+                        onClick = { showBackupReminder = false; backupAppToJSON(context, userProfile, transactionListWithSplits) },
                         colors = ButtonDefaults.buttonColors(containerColor = AppPrimary())
                     ) { Text(AppStr.backupNow, color = Color.White) }
                 },
-                dismissButton = {
-                    TextButton(onClick = { showBackupReminder = false }) { Text(AppStr.later, color = AppText()) }
-                },
-                shape = RoundedCornerShape(28.dp),
-                containerColor = AppSurface(),
-                titleContentColor = AppText(),
-                textContentColor = AppText()
+                dismissButton = { TextButton(onClick = { showBackupReminder = false }) { Text(AppStr.later, color = AppText()) } },
+                shape = RoundedCornerShape(28.dp), containerColor = AppSurface(), titleContentColor = AppText(), textContentColor = AppText()
             )
         }
     }
@@ -1807,605 +1623,262 @@ fun MonthYearSelector(currentMonth: Int, currentYear: Int, onMonthChange: (Int, 
     }
 }
 
-    @Composable
-    fun HomeScreen(
-        profile: UserProfile,
-        transactionsWithSplits: List<TransactionWithSplits>,
-        balance: Long,
-        walletBalances: Map<String, Long>,
-        income: Long,
-        expenses: Long,
-        selectedMonth: Int,
-        selectedYear: Int,
-        onMonthChange: (Int, Int) -> Unit,
-        onEdit: (TransactionWithSplits) -> Unit,
-        onDelete: (TransactionWithSplits) -> Unit,
-        // --- TAMBAHAN PARAMETER BUAT WRAPPED ---
-        onOpenWrapped: () -> Unit = {}
-    ) {
-        val context = LocalContext.current
-        val locale = Locale.forLanguageTag("id-ID")
-        val curSym = when(profile.currency) {
-            "USD", "AUD", "CAD", "SGD" -> "$"
-            "EUR" -> "€"
-            "GBP" -> "£"
-            "JPY", "CNY" -> "¥"
-            "CHF" -> "CHF"
-            else -> "Rp"
+@Composable
+fun HomeScreen(
+    profile: UserProfile,
+    transactionsWithSplits: List<TransactionWithSplits>,
+    balance: Long,
+    walletBalances: Map<String, Long>,
+    income: Long,
+    expenses: Long,
+    selectedMonth: Int,
+    selectedYear: Int,
+    onMonthChange: (Int, Int) -> Unit,
+    onEdit: (TransactionWithSplits) -> Unit,
+    onDelete: (TransactionWithSplits) -> Unit,
+    onOpenWrapped: (Int, Int) -> Unit = { _, _ -> } // 🔥 UPDATE PARAMETER
+) {
+    val context = LocalContext.current
+    val locale = Locale.forLanguageTag("id-ID")
+    val curSym = when(profile.currency) { "USD", "AUD", "CAD", "SGD" -> "$"; "EUR" -> "€"; "GBP" -> "£"; "JPY", "CNY" -> "¥"; "CHF" -> "CHF"; else -> "Rp" }
+
+    var searchQuery by remember { mutableStateOf("") }
+    val filteredTx = transactionsWithSplits.filter {
+        it.transaction.name.contains(searchQuery, ignoreCase = true) || it.transaction.category.contains(searchQuery, ignoreCase = true) || it.transaction.message.contains(searchQuery, ignoreCase = true)
+    }
+
+    val sharedPrefs = remember { context.getSharedPreferences("kumaflow_prefs", android.content.Context.MODE_PRIVATE) }
+    val cal = Calendar.getInstance()
+    cal.add(Calendar.MONTH, -1)
+    val prevMonth = cal.get(Calendar.MONTH) + 1
+    val prevYear = cal.get(Calendar.YEAR)
+    val wrappedKey = "$prevMonth-$prevYear"
+
+    var showWrappedBanner by remember { mutableStateOf(sharedPrefs.getString("last_viewed_wrapped", "") != wrappedKey) }
+
+    LazyColumn(modifier = Modifier.fillMaxSize().padding(top = 24.dp)) {
+        item {
+            Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                if (showWrappedBanner) {
+                    val bannerGradient = androidx.compose.ui.graphics.Brush.linearGradient(colors = listOf(Color(0xFFE40303), Color(0xFF732982)))
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp).clickable { onOpenWrapped(prevMonth, prevYear) }, // 🔥 TRIGGER KLIK DI SINI
+                        shape = RoundedCornerShape(24.dp), elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                    ) {
+                        Box(modifier = Modifier.fillMaxWidth().background(bannerGradient).padding(20.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("KumaFlow Wrapped ✨", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    val monthName = cal.getDisplayName(Calendar.MONTH, Calendar.LONG, locale) ?: "Bulan Lalu"
+                                    Text("Rapor keuanganmu di bulan $monthName udah siap! Yuk intip pengeluaranmu.", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, lineHeight = 16.sp)
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Icon(Icons.Default.ArrowForwardIos, contentDescription = "Buka Wrapped", tint = Color.White, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    }
+                }
+
+                Text(if (AppStr.isId) "Halo, ${profile.userName}!" else "Hello, ${profile.userName}!", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
+                Spacer(modifier = Modifier.height(16.dp))
+                MonthYearSelector(selectedMonth, selectedYear, onMonthChange)
+                Spacer(modifier = Modifier.height(24.dp))
+
+                val isPrideThemeActive = profile.themeMode == 3 || profile.themeMode == 4
+                val prideGradient = androidx.compose.ui.graphics.Brush.linearGradient(colors = listOf(Color(0xFFE40303), Color(0xFFFF8C00), Color(0xFFFFED00), Color(0xFF008026), Color(0xFF24408E), Color(0xFF732982)))
+                val defaultSurfaceColor = AppSurface()
+
+                Box(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 250.dp).clip(RoundedCornerShape(32.dp)).background(if (isPrideThemeActive) prideGradient else androidx.compose.ui.graphics.SolidColor(defaultSurfaceColor))
+                ) {
+                    Column(modifier = Modifier.padding(vertical = 32.dp).fillMaxSize(), verticalArrangement = Arrangement.Center) {
+                        Column(modifier = Modifier.padding(horizontal = 32.dp)) {
+                            Text(AppStr.curBal, color = if (isPrideThemeActive) Color.White else AppText(), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            val balPref = if (balance < 0) "- " else ""
+                            AutoSizeText(text = "$balPref$curSym ${NumberFormat.getInstance(locale).format(abs(balance))}", modifier = Modifier.fillMaxWidth(), fontSize = 48.sp, fontWeight = FontWeight.Black, color = Color.White, minimumFallbackSize = 24.sp)
+                        }
+                        Spacer(modifier = Modifier.height(20.dp))
+                        LazyRow(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 32.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            items(walletBalances.toList()) { (walletName, amt) ->
+                                val wBalPref = if (amt < 0) "- " else ""
+                                Column(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(AppBg().copy(alpha = 0.2f)).padding(horizontal = 16.dp, vertical = 10.dp)) {
+                                    Text(walletName, color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text("$wBalPref$curSym ${NumberFormat.getInstance(locale).format(abs(amt))}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.ArrowUpward, null, tint = if (isPrideThemeActive) Color.White else AppGreen(), modifier = Modifier.size(20.dp))
+                            AutoSizeText(text = "${AppStr.inc} $curSym ${NumberFormat.getInstance(locale).format(income)}", modifier = Modifier.weight(1f).padding(start = 4.dp), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, minimumFallbackSize = 8.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(Icons.Default.ArrowDownward, null, tint = if (isPrideThemeActive) Color.White else AppRed(), modifier = Modifier.size(20.dp))
+                            AutoSizeText(text = "${AppStr.exp} $curSym ${NumberFormat.getInstance(locale).format(expenses)}", modifier = Modifier.weight(1f).padding(start = 4.dp), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, minimumFallbackSize = 8.sp)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                OutlinedTextField(
+                    value = searchQuery, onValueChange = { searchQuery = it }, label = { Text(AppStr.searchTx) },
+                    leadingIcon = { Icon(Icons.Default.Search, null, tint = AppText().copy(alpha = 0.5f)) },
+                    trailingIcon = { if (searchQuery.isNotEmpty()) { IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Close, null, tint = AppText()) } } },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), shape = RoundedCornerShape(16.dp), singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AppPrimary(), unfocusedBorderColor = AppSurfaceVariant())
+                )
+
+                Text(AppStr.recTx, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = AppText())
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         }
 
-        var searchQuery by remember { mutableStateOf("") }
-
-        val filteredTx = transactionsWithSplits.filter {
-            it.transaction.name.contains(searchQuery, ignoreCase = true) ||
-                    it.transaction.category.contains(searchQuery, ignoreCase = true) ||
-                    it.transaction.message.contains(searchQuery, ignoreCase = true)
-        }
-
-        // --- LOGIKA PENGECEKAN WRAPPED BULAN LALU ---
-        val sharedPrefs = remember { context.getSharedPreferences("kumaflow_prefs", android.content.Context.MODE_PRIVATE) }
-
-        // Cari tau bulan & tahun kemaren
-        val cal = Calendar.getInstance()
-        cal.add(Calendar.MONTH, -1)
-        val prevMonth = cal.get(Calendar.MONTH) + 1
-        val prevYear = cal.get(Calendar.YEAR)
-        val wrappedKey = "$prevMonth-$prevYear"
-
-        // Cek apakah banner harus dimunculin
-        var showWrappedBanner by remember {
-            mutableStateOf(sharedPrefs.getString("last_viewed_wrapped", "") != wrappedKey)
-        }
-
-        LazyColumn(modifier = Modifier.fillMaxSize().padding(top = 24.dp)) {
+        if (filteredTx.isEmpty()) {
             item {
-                Column(modifier = Modifier.padding(horizontal = 24.dp)) {
-
-                    // 🔥 UI BANNER WRAPPED 🔥
-                    if (showWrappedBanner) {
-                        val bannerGradient = androidx.compose.ui.graphics.Brush.linearGradient(
-                            colors = listOf(Color(0xFFE40303), Color(0xFF732982)) // Merah ke Ungu ala IG Story
-                        )
-
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 20.dp)
-                                .clickable {
-                                    // Aksi pas di-klik: Buka layar full Wrapped
-                                    onOpenWrapped()
-                                    // (Nanti flag sharedprefs-nya kita update pas slide Wrapped-nya udah selesai ditonton)
-                                },
-                            shape = RoundedCornerShape(24.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(bannerGradient)
-                                    .padding(20.dp)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            "KumaFlow Wrapped ✨",
-                                            color = Color.White,
-                                            fontSize = 18.sp,
-                                            fontWeight = FontWeight.ExtraBold
-                                        )
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        val monthName = cal.getDisplayName(Calendar.MONTH, Calendar.LONG, locale) ?: "Bulan Lalu"
-                                        Text(
-                                            "Rapor keuanganmu di bulan $monthName udah siap! Yuk intip pengeluaranmu.",
-                                            color = Color.White.copy(alpha = 0.9f),
-                                            fontSize = 12.sp,
-                                            lineHeight = 16.sp
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Icon(
-                                        Icons.Default.ArrowForwardIos,
-                                        contentDescription = "Buka Wrapped",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Text(
-                        if (AppStr.isId) "Halo, ${profile.userName}!" else "Hello, ${profile.userName}!",
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = AppText()
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    MonthYearSelector(selectedMonth, selectedYear, onMonthChange)
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // --- LOGIKA GRADIENT EASTER EGG (Kotak Saldo) ---
-                    val isPrideThemeActive = profile.themeMode == 3 || profile.themeMode == 4
-                    val prideGradient = androidx.compose.ui.graphics.Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFFE40303), Color(0xFFFF8C00), Color(0xFFFFED00),
-                            Color(0xFF008026), Color(0xFF24408E), Color(0xFF732982)
-                        )
-                    )
-                    val defaultSurfaceColor = AppSurface()
-
-                    // 🔥 BOX SAKTI PENGGANTI CARD 🔥
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 250.dp)
-                            .clip(RoundedCornerShape(32.dp))
-                            .background(
-                                if (isPrideThemeActive) prideGradient else androidx.compose.ui.graphics.SolidColor(defaultSurfaceColor)
-                            )
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .padding(vertical = 32.dp)
-                                .fillMaxSize(),
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Column(modifier = Modifier.padding(horizontal = 32.dp)) {
-                                Text(
-                                    AppStr.curBal,
-                                    color = if (isPrideThemeActive) Color.White else AppText(),
-                                    fontSize = 24.sp,
-                                    fontWeight = FontWeight.ExtraBold
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                val balPref = if (balance < 0) "- " else ""
-                                AutoSizeText(
-                                    text = "$balPref$curSym ${NumberFormat.getInstance(locale).format(abs(balance))}",
-                                    modifier = Modifier.fillMaxWidth(),
-                                    fontSize = 48.sp,
-                                    fontWeight = FontWeight.Black,
-                                    color = Color.White,
-                                    minimumFallbackSize = 24.sp
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(20.dp))
-
-                            LazyRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                contentPadding = PaddingValues(horizontal = 32.dp),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                items(walletBalances.toList()) { (walletName, amt) ->
-                                    val wBalPref = if (amt < 0) "- " else ""
-                                    Column(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .background(AppBg().copy(alpha = 0.2f))
-                                            .padding(horizontal = 16.dp, vertical = 10.dp)
-                                    ) {
-                                        Text(
-                                            walletName,
-                                            color = Color.White.copy(alpha = 0.8f),
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            "$wBalPref$curSym ${NumberFormat.getInstance(locale).format(abs(amt))}",
-                                            color = Color.White,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.ExtraBold
-                                        )
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(20.dp))
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 32.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Default.ArrowUpward,
-                                    null,
-                                    tint = if (isPrideThemeActive) Color.White else AppGreen(),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                AutoSizeText(
-                                    text = "${AppStr.inc} $curSym ${NumberFormat.getInstance(locale).format(income)}",
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(start = 4.dp),
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    minimumFallbackSize = 8.sp
-                                )
-
-                                Spacer(modifier = Modifier.width(8.dp))
-
-                                Icon(
-                                    Icons.Default.ArrowDownward,
-                                    null,
-                                    tint = if (isPrideThemeActive) Color.White else AppRed(),
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                AutoSizeText(
-                                    text = "${AppStr.exp} $curSym ${NumberFormat.getInstance(locale).format(expenses)}",
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(start = 4.dp),
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    minimumFallbackSize = 8.sp
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(32.dp))
-
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        label = { Text(AppStr.searchTx) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Search,
-                                null,
-                                tint = AppText().copy(alpha = 0.5f)
-                            )
-                        },
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { searchQuery = "" }) {
-                                    Icon(Icons.Default.Close, null, tint = AppText())
-                                }
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 16.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AppPrimary(),
-                            unfocusedBorderColor = AppSurfaceVariant()
-                        )
-                    )
-
-                    Text(
-                        AppStr.recTx,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 20.sp,
-                        color = AppText()
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
+                Column(modifier = Modifier.fillMaxWidth().height(200.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                    Text("ʕ•ᴥ•ʔ", fontSize = 64.sp, color = AppText().copy(alpha = 0.3f))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(AppStr.noTx, textAlign = TextAlign.Center, color = AppText().copy(alpha = 0.5f), fontWeight = FontWeight.Bold)
                 }
             }
-
-            if (filteredTx.isEmpty()) {
-                item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            "ʕ•ᴥ•ʔ",
-                            fontSize = 64.sp,
-                            color = AppText().copy(alpha = 0.3f)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            AppStr.noTx,
-                            textAlign = TextAlign.Center,
-                            color = AppText().copy(alpha = 0.5f),
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            } else {
-                items(filteredTx) {
-                    Box(modifier = Modifier.padding(horizontal = 24.dp)) {
-                        TransactionItem(profile, it, onEdit, onDelete)
-                    }
-                    Spacer(modifier = Modifier.height(14.dp))
-                }
+        } else {
+            items(filteredTx) {
+                Box(modifier = Modifier.padding(horizontal = 24.dp)) { TransactionItem(profile, it, onEdit, onDelete) }
+                Spacer(modifier = Modifier.height(14.dp))
             }
-
-            item { Spacer(modifier = Modifier.height(100.dp)) }
         }
+        item { Spacer(modifier = Modifier.height(100.dp)) }
+    }
+}
+
+@Composable
+fun ReportScreen(
+    profile: UserProfile,
+    monthlyTransactions: List<KumaTransaction>,
+    allTransactions: List<KumaTransaction>,
+    income: Long,
+    expenses: Long,
+    balance: Long,
+    selectedMonth: Int,
+    selectedYear: Int,
+    onMonthChange: (Int, Int) -> Unit,
+    onOpenWrapped: (Int, Int) -> Unit = { _, _ -> } // 🔥 UPDATE PARAMETER
+) {
+    val locale = Locale.forLanguageTag("id-ID")
+    val curSym = when(profile.currency) { "USD", "AUD", "CAD", "SGD" -> "$"; "EUR" -> "€"; "GBP" -> "£"; "JPY", "CNY" -> "¥"; "CHF" -> "CHF"; else -> "Rp" }
+
+    fun getCatColor(catName: String): Color {
+        val predefined = mapOf("Financial" to Color(0xFF623802), "Food" to Color(0xFFD5641C), "Shopping" to Color(0xFFFEDD60), "Health" to Color(0xFFFEE6B1), "Transport" to Color(0xFFFFFFFF), "Education" to Color(0xFF929292), "Entertainment" to Color(0xFF000000), "Others" to Color(0xFF006064))
+        return predefined[catName] ?: Color(android.graphics.Color.HSVToColor(floatArrayOf(abs(catName.hashCode()) % 360f, 0.6f, 0.9f)))
     }
 
-    @Composable
-    fun ReportScreen(
-        profile: UserProfile,
-        monthlyTransactions: List<KumaTransaction>,
-        allTransactions: List<KumaTransaction>,
-        income: Long,
-        expenses: Long,
-        balance: Long,
-        selectedMonth: Int,
-        selectedYear: Int,
-        onMonthChange: (Int, Int) -> Unit
-    ) {
-        val locale = Locale.forLanguageTag("id-ID")
-        val curSym = when(profile.currency) {
-            "USD", "AUD", "CAD", "SGD" -> "$"
-            "EUR" -> "€"
-            "GBP" -> "£"
-            "JPY", "CNY" -> "¥"
-            "CHF" -> "CHF"
-            else -> "Rp"
-        }
+    val expensePerCat = monthlyTransactions.filter { !it.isIncome }.groupBy { it.category }.mapValues { entry -> entry.value.sumOf { it.amount.toLongOrNull() ?: 0L } }
+    val catTargets = remember(profile.categoryTargets) { try { JSONObject(profile.categoryTargets) } catch (e: Exception) { JSONObject() } }
 
-        fun getCatColor(catName: String): Color {
-            val predefined = mapOf(
-                "Financial" to Color(0xFF623802),
-                "Food" to Color(0xFFD5641C),
-                "Shopping" to Color(0xFFFEDD60),
-                "Health" to Color(0xFFFEE6B1),
-                "Transport" to Color(0xFFFFFFFF),
-                "Education" to Color(0xFF929292),
-                "Entertainment" to Color(0xFF000000),
-                "Others" to Color(0xFF006064)
-            )
-            return predefined[catName] ?: Color(
-                android.graphics.Color.HSVToColor(
-                    floatArrayOf(abs(catName.hashCode()) % 360f, 0.6f, 0.9f)
-                )
-            )
-        }
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(top = 24.dp).verticalScroll(rememberScrollState())) {
+        Text(AppStr.rep, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
+        Spacer(modifier = Modifier.height(16.dp))
 
-        val expensePerCat = monthlyTransactions
-            .filter { !it.isIncome }
-            .groupBy { it.category }
-            .mapValues { entry -> entry.value.sumOf { it.amount.toLongOrNull() ?: 0L } }
+        MonthYearSelector(selectedMonth, selectedYear, onMonthChange)
+        Spacer(modifier = Modifier.height(16.dp))
 
-        val catTargets = remember(profile.categoryTargets) {
-            try { JSONObject(profile.categoryTargets) } catch (e: Exception) { JSONObject() }
-        }
+        // 🔥 LOGIKA NAMA BULAN DINAMIS & TOMBOL REWATCH 🔥
+        val monthNamesList = if (AppStr.isId) listOf("Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember") else listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+        val currentSelectedMonthName = monthNamesList.getOrElse(selectedMonth - 1) { "" }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 24.dp)
-                .padding(top = 24.dp)
-                .verticalScroll(rememberScrollState())
+        OutlinedButton(
+            onClick = { onOpenWrapped(selectedMonth, selectedYear) },
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(16.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, AppPrimary().copy(alpha = 0.5f))
         ) {
-            Text(AppStr.rep, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
-            Spacer(modifier = Modifier.height(16.dp))
+            Icon(Icons.Default.AutoAwesome, contentDescription = "Rewatch", tint = AppPrimary())
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Putar Ulang Wrapped $currentSelectedMonthName $selectedYear ✨", color = AppPrimary(), fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+        }
 
-            MonthYearSelector(selectedMonth, selectedYear, onMonthChange)
+        Spacer(modifier = Modifier.height(24.dp))
 
-            Spacer(modifier = Modifier.height(24.dp))
+        val isPrideThemeActive = profile.themeMode == 3 || profile.themeMode == 4
+        val prideGradient = Brush.linearGradient(colors = listOf(Color(0xFFE40303), Color(0xFFFF8C00), Color(0xFFFFED00), Color(0xFF008026), Color(0xFF24408E), Color(0xFF732982)))
+        val defaultSurfaceColor = AppSurface()
 
-            // --- LOGIKA GRADIENT EASTER EGG ---
-            val isPrideThemeActive = profile.themeMode == 3 || profile.themeMode == 4
-            val prideGradient = Brush.linearGradient(
-                colors = listOf(
-                    Color(0xFFE40303), // Merah
-                    Color(0xFFFF8C00), // Orange
-                    Color(0xFFFFED00), // Kuning
-                    Color(0xFF008026), // Hijau
-                    Color(0xFF24408E), // Biru
-                    Color(0xFF732982)  // Ungu
-                )
-            )
-            val defaultSurfaceColor = AppSurface()
-
-            // 🔥 BOX SAKTI PENGGANTI CARD 🔥
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 185.dp)
-                    .clip(RoundedCornerShape(32.dp))
-                    .background(
-                        if (isPrideThemeActive) prideGradient else androidx.compose.ui.graphics.SolidColor(defaultSurfaceColor)
-                    )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .padding(24.dp)
-                        .fillMaxSize(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                        Text(
-                            AppStr.sum,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = if (isPrideThemeActive) Color.White else AppText()
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(AppStr.net, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-
-                        val balPref = if (balance < 0) "- " else "+"
-                        AutoSizeText(
-                            text = "$curSym $balPref${NumberFormat.getInstance(locale).format(abs(balance))}",
-                            modifier = Modifier.fillMaxWidth(),
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Black,
-                            color = Color.White,
-                            minimumFallbackSize = 14.sp
-                        )
-                    }
-                    Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
-                        IncomeExpensePill(AppStr.inc, "$curSym ${NumberFormat.getInstance(locale).format(income)}", if (isPrideThemeActive) Color.White else AppGreen(), true)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        IncomeExpensePill(AppStr.exp, "$curSym ${NumberFormat.getInstance(locale).format(expenses)}", if (isPrideThemeActive) Color.White else AppRed(), false)
-                    }
+        Box(modifier = Modifier.fillMaxWidth().heightIn(min = 185.dp).clip(RoundedCornerShape(32.dp)).background(if (isPrideThemeActive) prideGradient else androidx.compose.ui.graphics.SolidColor(defaultSurfaceColor))) {
+            Row(modifier = Modifier.padding(24.dp).fillMaxSize(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(AppStr.sum, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = if (isPrideThemeActive) Color.White else AppText())
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(AppStr.net, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+                    val balPref = if (balance < 0) "- " else "+"
+                    AutoSizeText(text = "$curSym $balPref${NumberFormat.getInstance(locale).format(abs(balance))}", modifier = Modifier.fillMaxWidth(), fontSize = 22.sp, fontWeight = FontWeight.Black, color = Color.White, minimumFallbackSize = 14.sp)
+                }
+                Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
+                    IncomeExpensePill(AppStr.inc, "$curSym ${NumberFormat.getInstance(locale).format(income)}", if (isPrideThemeActive) Color.White else AppGreen(), true)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    IncomeExpensePill(AppStr.exp, "$curSym ${NumberFormat.getInstance(locale).format(expenses)}", if (isPrideThemeActive) Color.White else AppRed(), false)
                 }
             }
+        }
 
-            if (profile.monthlyTarget > 0) {
-                Spacer(modifier = Modifier.height(20.dp))
-                val progress = (expenses.toFloat() / profile.monthlyTarget.toFloat()).coerceIn(0f, 1f)
-                val isOver = expenses > profile.monthlyTarget
+        if (profile.monthlyTarget > 0) {
+            Spacer(modifier = Modifier.height(20.dp))
+            val progress = (expenses.toFloat() / profile.monthlyTarget.toFloat()).coerceIn(0f, 1f)
+            val isOver = expenses > profile.monthlyTarget
 
-                Text(AppStr.targetProg, fontWeight = FontWeight.Bold, color = AppText())
-                Spacer(modifier = Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(10.dp)
-                        .clip(CircleShape),
-                    color = if(isOver) AppRed() else AppGreen(),
-                    trackColor = AppSurfaceVariant()
-                )
-                Text(
-                    "${(progress * 100).toInt()}% " + (if(AppStr.isId) "dari" else "of") + " $curSym ${NumberFormat.getInstance(locale).format(profile.monthlyTarget)}",
-                    fontSize = 12.sp,
-                    color = if(isOver) AppRed() else Color.Gray
-                )
-            }
+            Text(AppStr.targetProg, fontWeight = FontWeight.Bold, color = AppText())
+            Spacer(modifier = Modifier.height(8.dp))
+            LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth().height(10.dp).clip(CircleShape), color = if(isOver) AppRed() else AppGreen(), trackColor = AppSurfaceVariant())
+            Text("${(progress * 100).toInt()}% " + (if(AppStr.isId) "dari" else "of") + " $curSym ${NumberFormat.getInstance(locale).format(profile.monthlyTarget)}", fontSize = 12.sp, color = if(isOver) AppRed() else Color.Gray)
+        }
 
-            Spacer(modifier = Modifier.height(30.dp))
-            Text(AppStr.spendBreak, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = AppText())
-            Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(30.dp))
+        Text(AppStr.spendBreak, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = AppText())
+        Spacer(modifier = Modifier.height(12.dp))
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(32.dp),
-                colors = CardDefaults.cardColors(containerColor = AppSurface())
-            ) {
-                Column(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(180.dp)
-                            .padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        val bgArcCol = AppSurfaceVariant()
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            if (expenses == 0L) {
-                                drawArc(
-                                    color = bgArcCol,
-                                    startAngle = -90f,
-                                    sweepAngle = 360f,
-                                    useCenter = false,
-                                    style = Stroke(25.dp.toPx())
-                                )
-                            } else {
-                                var start = -90f
-                                expensePerCat.forEach { (cat, amt) ->
-                                    val sweep = (amt.toFloat() / expenses.toFloat()) * 360f
-                                    drawArc(
-                                        color = getCatColor(cat),
-                                        startAngle = start,
-                                        sweepAngle = sweep,
-                                        useCenter = false,
-                                        style = Stroke(25.dp.toPx())
-                                    )
-                                    start += sweep
-                                }
+        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(32.dp), colors = CardDefaults.cardColors(containerColor = AppSurface())) {
+            Column(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(modifier = Modifier.size(180.dp).padding(16.dp), contentAlignment = Alignment.Center) {
+                    val bgArcCol = AppSurfaceVariant()
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        if (expenses == 0L) {
+                            drawArc(color = bgArcCol, startAngle = -90f, sweepAngle = 360f, useCenter = false, style = Stroke(25.dp.toPx()))
+                        } else {
+                            var start = -90f
+                            expensePerCat.forEach { (cat, amt) ->
+                                val sweep = (amt.toFloat() / expenses.toFloat()) * 360f
+                                drawArc(color = getCatColor(cat), startAngle = start, sweepAngle = sweep, useCenter = false, style = Stroke(25.dp.toPx()))
+                                start += sweep
                             }
                         }
-                        AutoSizeText(
-                            text = "$curSym ${NumberFormat.getInstance(locale).format(expenses)}",
-                            modifier = Modifier
-                                .padding(16.dp)
-                                .fillMaxWidth(),
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = AppText(),
-                            minimumFallbackSize = 12.sp,
-                            textAlign = TextAlign.Center
-                        )
                     }
+                    AutoSizeText(text = "$curSym ${NumberFormat.getInstance(locale).format(expenses)}", modifier = Modifier.padding(16.dp).fillMaxWidth(), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = AppText(), minimumFallbackSize = 12.sp, textAlign = TextAlign.Center)
+                }
 
-                    if (expenses == 0L) {
-                        Text(
-                            AppStr.noData,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = AppText().copy(alpha = 0.6f),
-                            modifier = Modifier.padding(vertical = 16.dp)
-                        )
-                    } else {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            expensePerCat.forEach { (label, amt) ->
-                                val target = catTargets.optLong(label, 0L)
-                                val catCol = getCatColor(label)
-                                val progress = if (target > 0) (amt.toFloat() / target.toFloat()).coerceIn(0f, 1f) else 0f
-                                val isOverLimit = target > 0 && amt > target
+                if (expenses == 0L) {
+                    Text(AppStr.noData, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppText().copy(alpha = 0.6f), modifier = Modifier.padding(vertical = 16.dp))
+                } else {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        expensePerCat.forEach { (label, amt) ->
+                            val target = catTargets.optLong(label, 0L)
+                            val catCol = getCatColor(label)
+                            val progress = if (target > 0) (amt.toFloat() / target.toFloat()).coerceIn(0f, 1f) else 0f
+                            val isOverLimit = target > 0 && amt > target
 
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                        .height(55.dp),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = CardDefaults.cardColors(containerColor = AppSurfaceVariant().copy(alpha = 0.5f))
-                                ) {
-                                    Box(modifier = Modifier.fillMaxSize()) {
-                                        if (target > 0) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxHeight()
-                                                    .fillMaxWidth(progress)
-                                                    .background(catCol.copy(alpha = 0.2f))
-                                                    .align(Alignment.CenterStart)
-                                            )
-                                        }
-                                        Row(
-                                            modifier = Modifier
-                                                .padding(horizontal = 16.dp)
-                                                .fillMaxSize(),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Stop,
-                                                contentDescription = null,
-                                                tint = catCol,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                label,
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = AppText(),
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            Text(
-                                                "$curSym ${NumberFormat.getInstance(locale).format(amt)}",
-                                                fontSize = 14.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = AppText()
-                                            )
-                                        }
-                                        if (target > 0) {
-                                            val budgetInfo = if(isOverLimit) "$curSym ${NumberFormat.getInstance(locale).format(amt-target)} OVER!" else "$curSym ${NumberFormat.getInstance(locale).format(target-amt)} left"
-                                            Text(
-                                                budgetInfo,
-                                                fontSize = 9.sp,
-                                                color = if(isOverLimit) AppRed() else AppText().copy(alpha=0.7f),
-                                                modifier = Modifier
-                                                    .align(Alignment.BottomEnd)
-                                                    .padding(end = 16.dp, bottom = 4.dp)
-                                            )
-                                        }
+                            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).height(55.dp), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = AppSurfaceVariant().copy(alpha = 0.5f))) {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    if (target > 0) Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(progress).background(catCol.copy(alpha = 0.2f)).align(Alignment.CenterStart))
+                                    Row(modifier = Modifier.padding(horizontal = 16.dp).fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Stop, contentDescription = null, tint = catCol, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppText(), modifier = Modifier.weight(1f))
+                                        Text("$curSym ${NumberFormat.getInstance(locale).format(amt)}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppText())
+                                    }
+                                    if (target > 0) {
+                                        val budgetInfo = if(isOverLimit) "$curSym ${NumberFormat.getInstance(locale).format(amt-target)} OVER!" else "$curSym ${NumberFormat.getInstance(locale).format(target-amt)} left"
+                                        Text(budgetInfo, fontSize = 9.sp, color = if(isOverLimit) AppRed() else AppText().copy(alpha=0.7f), modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 4.dp))
                                     }
                                 }
                             }
@@ -2413,149 +1886,97 @@ fun MonthYearSelector(currentMonth: Int, currentYear: Int, onMonthChange: (Int, 
                     }
                 }
             }
+        }
 
-            Spacer(modifier = Modifier.height(30.dp))
-            Text(AppStr.trends, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = AppText())
-            Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(30.dp))
+        Text(AppStr.trends, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = AppText())
+        Spacer(modifier = Modifier.height(12.dp))
 
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(280.dp),
-                shape = RoundedCornerShape(32.dp),
-                colors = CardDefaults.cardColors(containerColor = AppSurface())
-            ) {
-                Column(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .fillMaxSize()
-                ) {
-                    val greenCol = AppGreen()
-                    val redCol = AppRed()
-                    val variantCol = AppSurfaceVariant()
-                    val textCol = AppText()
+        Card(modifier = Modifier.fillMaxWidth().height(280.dp), shape = RoundedCornerShape(32.dp), colors = CardDefaults.cardColors(containerColor = AppSurface())) {
+            Column(modifier = Modifier.padding(16.dp).fillMaxSize()) {
+                val greenCol = AppGreen()
+                val redCol = AppRed()
+                val variantCol = AppSurfaceVariant()
+                val textCol = AppText()
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        LegendItem(AppStr.inc, greenCol)
-                        Spacer(modifier = Modifier.width(16.dp))
-                        LegendItem(AppStr.exp, redCol)
-                    }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    LegendItem(AppStr.inc, greenCol)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    LegendItem(AppStr.exp, redCol)
+                }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                    // --- LOGIKA 5 BULAN TERAKHIR (DINAMIS) ---
-                    val incomeData = FloatArray(5) { 0f }
-                    val expenseData = FloatArray(5) { 0f }
-                    val monthLabels = mutableListOf<String>()
-                    val targetMonths = mutableListOf<Pair<Int, Int>>() // Pair(Bulan, Tahun)
+                val incomeData = FloatArray(5) { 0f }
+                val expenseData = FloatArray(5) { 0f }
+                val monthLabels = mutableListOf<String>()
+                val targetMonths = mutableListOf<Pair<Int, Int>>()
 
-                    val cal = Calendar.getInstance()
-                    cal.set(Calendar.YEAR, selectedYear)
-                    cal.set(Calendar.MONTH, selectedMonth - 1)
+                val cal = Calendar.getInstance()
+                cal.set(Calendar.YEAR, selectedYear)
+                cal.set(Calendar.MONTH, selectedMonth - 1)
 
-                    // Mundur 4 bulan ke belakang dari bulan yang dipilih (total 5 bulan)
-                    for (i in 4 downTo 0) {
-                        val tempCal = cal.clone() as Calendar
-                        tempCal.add(Calendar.MONTH, -i)
-                        val m = tempCal.get(Calendar.MONTH) + 1
-                        val y = tempCal.get(Calendar.YEAR)
-                        targetMonths.add(Pair(m, y))
+                for (i in 4 downTo 0) {
+                    val tempCal = cal.clone() as Calendar
+                    tempCal.add(Calendar.MONTH, -i)
+                    val m = tempCal.get(Calendar.MONTH) + 1
+                    val y = tempCal.get(Calendar.YEAR)
+                    targetMonths.add(Pair(m, y))
+                    val monthName = tempCal.getDisplayName(Calendar.MONTH, Calendar.SHORT, locale) ?: ""
+                    monthLabels.add(monthName)
+                }
 
-                        // Ambil singkatan nama bulan yang bener
-                        val monthName = tempCal.getDisplayName(Calendar.MONTH, Calendar.SHORT, locale) ?: ""
-                        monthLabels.add(monthName)
-                    }
-
-                    allTransactions.forEach { t ->
-                        try {
-                            val dt = LocalDateTime.parse(t.timestamp, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                            val txMonth = dt.monthValue
-                            val txYear = dt.year
-
-                            // Cek apakah transaksi ini masuk di jangkauan 5 bulan kita
-                            val idx = targetMonths.indexOf(Pair(txMonth, txYear))
-                            if (idx != -1) {
-                                val amt = t.amount.toFloatOrNull() ?: 0f
-                                if (t.isIncome) incomeData[idx] += amt else expenseData[idx] += amt
-                            }
-                        } catch (_: Exception) {}
-                    }
-
-                    val maxVal = maxOf(incomeData.maxOrNull() ?: 0f, expenseData.maxOrNull() ?: 0f).coerceAtLeast(1f)
-                    val incPoints = incomeData.map { it / maxVal }
-                    val expPoints = expenseData.map { it / maxVal }
-                    val hasData = incomeData.sum() > 0f || expenseData.sum() > 0f
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                    ) {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            for (i in 0..4) {
-                                val x = i * size.width / 4
-                                drawLine(
-                                    color = variantCol.copy(alpha = 0.5f),
-                                    start = Offset(x, 0f),
-                                    end = Offset(x, size.height),
-                                    strokeWidth = 1.dp.toPx()
-                                )
-                            }
-                            for (i in 0..5) {
-                                val y = size.height - (i * size.height / 5)
-                                drawLine(
-                                    color = variantCol.copy(alpha = 0.3f),
-                                    start = Offset(0f, y),
-                                    end = Offset(size.width, y),
-                                    strokeWidth = 1.dp.toPx()
-                                )
-                            }
-                            if (hasData) {
-                                drawTrendsArea(incPoints, greenCol)
-                                drawTrendsArea(expPoints, redCol)
-                            }
+                allTransactions.forEach { t ->
+                    try {
+                        val dt = LocalDateTime.parse(t.timestamp, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                        val txMonth = dt.monthValue
+                        val txYear = dt.year
+                        val idx = targetMonths.indexOf(Pair(txMonth, txYear))
+                        if (idx != -1) {
+                            val amt = t.amount.toFloatOrNull() ?: 0f
+                            if (t.isIncome) incomeData[idx] += amt else expenseData[idx] += amt
                         }
-                        if (!hasData) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    AppStr.noTrendData,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = textCol.copy(alpha = 0.5f)
-                                )
-                            }
+                    } catch (_: Exception) {}
+                }
+
+                val maxVal = maxOf(incomeData.maxOrNull() ?: 0f, expenseData.maxOrNull() ?: 0f).coerceAtLeast(1f)
+                val incPoints = incomeData.map { it / maxVal }
+                val expPoints = expenseData.map { it / maxVal }
+                val hasData = incomeData.sum() > 0f || expenseData.sum() > 0f
+
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        for (i in 0..4) {
+                            val x = i * size.width / 4
+                            drawLine(color = variantCol.copy(alpha = 0.5f), start = Offset(x, 0f), end = Offset(x, size.height), strokeWidth = 1.dp.toPx())
+                        }
+                        for (i in 0..5) {
+                            val y = size.height - (i * size.height / 5)
+                            drawLine(color = variantCol.copy(alpha = 0.3f), start = Offset(0f, y), end = Offset(size.width, y), strokeWidth = 1.dp.toPx())
+                        }
+                        if (hasData) {
+                            drawTrendsArea(incPoints, greenCol)
+                            drawTrendsArea(expPoints, redCol)
                         }
                     }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        monthLabels.forEachIndexed { index, monthStr ->
-                            // Highlight bulan yang lagi di-select (pasti ada di index ke-4 / paling kanan)
-                            val isCurrentSelected = index == 4
-                            Text(
-                                monthStr,
-                                fontSize = if(isCurrentSelected) 12.sp else 10.sp,
-                                fontWeight = if(isCurrentSelected) FontWeight.Black else FontWeight.Bold,
-                                color = if(isCurrentSelected) greenCol else textCol
-                            )
+                    if (!hasData) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(AppStr.noTrendData, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textCol.copy(alpha = 0.5f))
                         }
                     }
                 }
-            }
-            Spacer(modifier = Modifier.height(100.dp))
-        }
-    }
 
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    monthLabels.forEachIndexed { index, monthStr ->
+                        val isCurrentSelected = index == 4
+                        Text(monthStr, fontSize = if(isCurrentSelected) 12.sp else 10.sp, fontWeight = if(isCurrentSelected) FontWeight.Black else FontWeight.Bold, color = if(isCurrentSelected) greenCol else textCol)
+                    }
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(100.dp))
+    }
+}
 fun DrawScope.drawTrendsArea(points: List<Float>, color: Color) {
     if (points.size < 2) return
     val w = size.width
@@ -2603,476 +2024,615 @@ fun DrawScope.drawTrendsArea(points: List<Float>, color: Color) {
     drawCircle(Color.White, radius = 2.5f.dp.toPx(), center = Offset(lastX, lastY))
 }
 
-    @Composable
-    fun SettingsScreen(
-        currentProfile: UserProfile,
-        monthlyTransactionsWithSplits: List<TransactionWithSplits>,
-        allTransactionsWithSplits: List<TransactionWithSplits>,
-        dao: TransactionDao,
-        selectedMonth: Int,
-        selectedYear: Int,
-        onForceUpdate: () -> Unit
-    ) {
-        val context = LocalContext.current
-        val haptic = LocalHapticFeedback.current
-        val mainActivity = context as? MainActivity
-        val scope = rememberCoroutineScope()
+@Composable
+fun SettingsScreen(
+    currentProfile: UserProfile,
+    monthlyTransactionsWithSplits: List<TransactionWithSplits>,
+    allTransactionsWithSplits: List<TransactionWithSplits>,
+    dao: TransactionDao,
+    selectedMonth: Int,
+    selectedYear: Int,
+    onForceUpdate: () -> Unit
+) {
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val mainActivity = context as? MainActivity
+    val scope = rememberCoroutineScope()
 
-        var showVersionDialog by remember { mutableStateOf(false) }
-        var showPrivacyDialog by remember { mutableStateOf(false) }
-        var showTermsDialog by remember { mutableStateOf(false) }
-        var showEditProfileDialog by remember { mutableStateOf(false) }
-        var showPinDialog by remember { mutableStateOf(false) }
-        var showCurrencyDialog by remember { mutableStateOf(false) }
-        var showTargetDialog by remember { mutableStateOf(false) }
-        var showCatBudgetDialog by remember { mutableStateOf(false) }
-        var showThemeDialog by remember { mutableStateOf(false) }
-        var showCategoryDialog by remember { mutableStateOf(false) }
-        var showWalletDialog by remember { mutableStateOf(false) }
+    var showVersionDialog by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
+    var showTermsDialog by remember { mutableStateOf(false) }
+    var showEditProfileDialog by remember { mutableStateOf(false) }
+    var showPinDialog by remember { mutableStateOf(false) }
+    var showCurrencyDialog by remember { mutableStateOf(false) }
+    var showTargetDialog by remember { mutableStateOf(false) }
+    var showCatBudgetDialog by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
+    var showCategoryDialog by remember { mutableStateOf(false) }
+    var showWalletDialog by remember { mutableStateOf(false) }
 
-        var pinInput by remember { mutableStateOf("") }
-        var targetInput by remember { mutableStateOf(currentProfile.monthlyTarget.toString()) }
-        var isTurningOn by remember { mutableStateOf(true) }
-        var newName by remember { mutableStateOf(currentProfile.userName) }
+    var pinInput by remember { mutableStateOf("") }
+    var targetInput by remember { mutableStateOf(currentProfile.monthlyTarget.toString()) }
+    var isTurningOn by remember { mutableStateOf(true) }
+    var newName by remember { mutableStateOf(currentProfile.userName) }
 
-        LaunchedEffect(mainActivity?.pendingRestoreJson) {
-            val jsonToRestore = mainActivity?.pendingRestoreJson
-            if (jsonToRestore != null) {
-                scope.launch(Dispatchers.IO) {
-                    try {
-                        val root = JSONObject(jsonToRestore)
-                        val pObj = root.getJSONObject("profile")
-                        val newProfile = UserProfile(
-                            userName = pObj.optString("userName", "User"),
-                            isAppLocked = pObj.optBoolean("isAppLocked", false),
-                            appPin = pObj.optString("appPin", ""),
-                            currency = pObj.optString("currency", "IDR"),
-                            dateFormat = pObj.optString("dateFormat", "dd MMM yyyy"),
-                            monthlyTarget = pObj.optLong("monthlyTarget", 0L),
-                            themeMode = pObj.optInt("themeMode", 0),
-                            isReminderOn = pObj.optBoolean("isReminderOn", false),
-                            reminderTimes = pObj.optString("reminderTimes", "05:00,12:30,15:30,18:00,20:00"),
-                            useCarryOver = pObj.optBoolean("useCarryOver", false),
-                            expenseCats = pObj.optString("expenseCats", "Food,Shopping,Health,Transport,Education,Entertainment,Others"),
-                            incomeCats = pObj.optString("incomeCats", "Financial,Others"),
-                            wallets = pObj.optString("wallets", "Cash,Bank BCA,GoPay"),
-                            categoryTargets = pObj.optString("categoryTargets", "{}"),
-                            isAmoledMode = pObj.optBoolean("isAmoledMode", false),
-                            categoryIcons = pObj.optString("categoryIcons", "{}")
-                        )
-                        dao.saveProfile(newProfile)
+    LaunchedEffect(mainActivity?.pendingRestoreJson) {
+        val jsonToRestore = mainActivity?.pendingRestoreJson
+        if (jsonToRestore != null) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val root = JSONObject(jsonToRestore)
+                    val pObj = root.getJSONObject("profile")
+                    val newProfile = UserProfile(
+                        userName = pObj.optString("userName", "User"),
+                        isAppLocked = pObj.optBoolean("isAppLocked", false),
+                        appPin = pObj.optString("appPin", ""),
+                        currency = pObj.optString("currency", "IDR"),
+                        dateFormat = pObj.optString("dateFormat", "dd MMM yyyy"),
+                        monthlyTarget = pObj.optLong("monthlyTarget", 0L),
+                        themeMode = pObj.optInt("themeMode", 0),
+                        isReminderOn = pObj.optBoolean("isReminderOn", false),
+                        reminderTimes = pObj.optString("reminderTimes", "05:00,12:30,15:30,18:00,20:00"),
+                        useCarryOver = pObj.optBoolean("useCarryOver", false),
+                        expenseCats = pObj.optString("expenseCats", "Food,Shopping,Health,Transport,Education,Entertainment,Others"),
+                        incomeCats = pObj.optString("incomeCats", "Financial,Others"),
+                        wallets = pObj.optString("wallets", "Cash,Bank BCA,GoPay"),
+                        categoryTargets = pObj.optString("categoryTargets", "{}"),
+                        isAmoledMode = pObj.optBoolean("isAmoledMode", false),
+                        categoryIcons = pObj.optString("categoryIcons", "{}")
+                    )
+                    dao.saveProfile(newProfile)
 
-                        val txsArr = root.getJSONArray("transactions")
-                        dao.clearTransactions()
+                    val txsArr = root.getJSONArray("transactions")
+                    dao.clearTransactions()
 
-                        for (i in 0 until txsArr.length()) {
-                            try {
-                                val tObj = txsArr.getJSONObject(i)
-                                var safeTimestamp = tObj.optString("timestamp", "")
-                                if (safeTimestamp.isBlank()) {
-                                    safeTimestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                                }
+                    for (i in 0 until txsArr.length()) {
+                        try {
+                            val tObj = txsArr.getJSONObject(i)
+                            var safeTimestamp = tObj.optString("timestamp", "")
+                            if (safeTimestamp.isBlank()) {
+                                safeTimestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                            }
 
-                                val baseTx = KumaTransaction(
-                                    name = tObj.optString("name", "Unknown"),
-                                    date = tObj.optString("date", ""),
-                                    amount = tObj.optString("amount", "0"),
-                                    isIncome = tObj.optBoolean("isIncome", false),
-                                    category = tObj.optString("category", "Others"),
-                                    wallet = tObj.optString("wallet", "Cash"),
-                                    timestamp = safeTimestamp,
-                                    message = tObj.optString("message", "")
-                                )
+                            val baseTx = KumaTransaction(
+                                name = tObj.optString("name", "Unknown"),
+                                date = tObj.optString("date", ""),
+                                amount = tObj.optString("amount", "0"),
+                                isIncome = tObj.optBoolean("isIncome", false),
+                                category = tObj.optString("category", "Others"),
+                                wallet = tObj.optString("wallet", "Cash"),
+                                timestamp = safeTimestamp,
+                                message = tObj.optString("message", "")
+                            )
 
-                                val splitsArr = tObj.optJSONArray("splits")
-                                val dbSplits = mutableListOf<TransactionSplit>()
-                                if (splitsArr != null) {
-                                    for (j in 0 until splitsArr.length()) {
-                                        val sObj = splitsArr.getJSONObject(j)
-                                        dbSplits.add(
-                                            TransactionSplit(
-                                                transactionId = 0,
-                                                splitWallet = sObj.optString("w", "Cash"),
-                                                splitAmount = sObj.optLong("a", 0L)
-                                            )
+                            val splitsArr = tObj.optJSONArray("splits")
+                            val dbSplits = mutableListOf<TransactionSplit>()
+                            if (splitsArr != null) {
+                                for (j in 0 until splitsArr.length()) {
+                                    val sObj = splitsArr.getJSONObject(j)
+                                    dbSplits.add(
+                                        TransactionSplit(
+                                            transactionId = 0,
+                                            splitWallet = sObj.optString("w", "Cash"),
+                                            splitAmount = sObj.optLong("a", 0L)
                                         )
-                                    }
+                                    )
                                 }
+                            }
 
-                                dao.insertFullTransaction(baseTx, dbSplits)
+                            dao.insertFullTransaction(baseTx, dbSplits)
 
-                            } catch (e: Exception) {
-                                android.util.Log.e("RestoreDebug", "Gagal insert transaksi ke-$i: ${e.message}")
+                        } catch (e: Exception) {
+                            android.util.Log.e("RestoreDebug", "Gagal insert transaksi ke-$i: ${e.message}")
+                        }
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, AppStr.resOk, Toast.LENGTH_SHORT).show()
+                        updateKumaWidget(context)
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Error Restore: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                } finally {
+                    mainActivity.pendingRestoreJson = null
+                }
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp)
+            .padding(top = 24.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Text(AppStr.set, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                SettingsGroupCard(
+                    title = AppStr.accSec,
+                    modifier = Modifier.weight(1f),
+                    items = listOf(
+                        AppStr.editProf to Icons.Default.Edit,
+                        AppStr.theme to Icons.Default.Palette,
+                        AppStr.appLck to Icons.Default.Fingerprint
+                    ),
+                    hasSwitch = true,
+                    isSwitchOn = currentProfile.isAppLocked,
+                    onSwitchChange = {
+                        isTurningOn = it
+                        showPinDialog = true
+                    }
+                ) { label ->
+                    when(label) {
+                        AppStr.editProf -> showEditProfileDialog = true
+                        AppStr.theme -> showThemeDialog = true
+                    }
+                }
+
+                SettingsGroupCard(
+                    title = AppStr.finPref,
+                    modifier = Modifier.weight(1f),
+                    items = listOf(
+                        AppStr.cur to Icons.Default.Sync,
+                        AppStr.manageWallet to Icons.Default.AccountBalanceWallet,
+                        AppStr.manageCat to Icons.Default.Category,
+                        AppStr.tar to Icons.Default.Adjust,
+                        AppStr.catBudget to Icons.Default.PieChart
+                    ),
+                    onClick = { label ->
+                        when(label) {
+                            AppStr.cur -> showCurrencyDialog = true
+                            AppStr.manageWallet -> showWalletDialog = true
+                            AppStr.tar -> showTargetDialog = true
+                            AppStr.manageCat -> showCategoryDialog = true
+                            AppStr.catBudget -> showCatBudgetDialog = true
+                        }
+                    }
+                )
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = AppSurface())
+            ) {
+                var expandReminders by remember { mutableStateOf(false) }
+
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text(
+                        AppStr.notif,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 14.sp,
+                        color = AppText(),
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.AccountBalanceWallet, null, tint = AppText(), modifier = Modifier.size(20.dp))
+                        Text(
+                            AppStr.carryOver,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 10.dp),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AppText(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Switch(
+                            checked = currentProfile.useCarryOver,
+                            onCheckedChange = { isChecked ->
+                                scope.launch {
+                                    dao.saveProfile(currentProfile.copy(useCarryOver = isChecked))
+                                    onForceUpdate()
+                                }
+                            },
+                            modifier = Modifier.scale(0.8f)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.NotificationsActive, null, tint = AppText(), modifier = Modifier.size(20.dp))
+                        Text(
+                            AppStr.dailyRem,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 10.dp),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AppText(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        if (currentProfile.isReminderOn) {
+                            IconButton(
+                                onClick = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    expandReminders = !expandReminders
+                                },
+                                modifier = Modifier.size(28.dp).padding(end = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (expandReminders) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = "Expand",
+                                    tint = AppText()
+                                )
                             }
                         }
 
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(context, AppStr.resOk, Toast.LENGTH_SHORT).show()
-                            updateKumaWidget(context)
+                        Switch(
+                            checked = currentProfile.isReminderOn,
+                            onCheckedChange = { isChecked ->
+                                scope.launch {
+                                    val newProf = currentProfile.copy(isReminderOn = isChecked)
+                                    dao.saveProfile(newProf)
+                                    onForceUpdate()
+                                }
+                                if (!isChecked) expandReminders = false
+                            },
+                            modifier = Modifier.scale(0.8f)
+                        )
+                    }
+
+                    if (currentProfile.isReminderOn && expandReminders) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(AppSurfaceVariant())
+                                .padding(12.dp)
+                        ) {
+                            val timesList = currentProfile.reminderTimes.split(",")
+                            timesList.forEachIndexed { index, time ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            val parts = time.split(":")
+                                            val hour = parts.getOrNull(0)?.toIntOrNull() ?: 0
+                                            val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
+
+                                            TimePickerDialog(context, { _, h, m ->
+                                                val newTimes = timesList.toMutableList()
+                                                newTimes[index] = String.format(Locale.getDefault(), "%02d:%02d", h, m)
+                                                val newProf = currentProfile.copy(reminderTimes = newTimes.joinToString(","))
+                                                scope.launch {
+                                                    dao.saveProfile(newProf)
+                                                    onForceUpdate()
+                                                }
+                                            }, hour, minute, true).show()
+                                        }
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.AccessTime, null, tint = AppText().copy(alpha=0.7f), modifier = Modifier.size(16.dp))
+                                    Text(
+                                        "${AppStr.rem} ${index + 1}",
+                                        modifier = Modifier.weight(1f).padding(start = 8.dp),
+                                        fontSize = 12.sp,
+                                        color = AppText().copy(alpha=0.8f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        time,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AppPrimary()
+                                    )
+                                }
+                                if (index < timesList.size - 1) {
+                                    HorizontalDivider(color = AppText().copy(alpha = 0.1f))
+                                }
+                            }
                         }
-                    } catch (e: Exception) {
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "Error Restore: ${e.message}", Toast.LENGTH_LONG).show()
-                        }
-                    } finally {
-                        mainActivity.pendingRestoreJson = null
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                SettingsGroupCard(
+                    title = AppStr.dat,
+                    modifier = Modifier.weight(1f),
+                    items = listOf(
+                        AppStr.expPdf to Icons.Default.PictureAsPdf,
+                        AppStr.expCsv to Icons.Default.Description,
+                        AppStr.expDrive to Icons.Default.AddToDrive,
+                        AppStr.backApp to Icons.Default.CloudUpload,
+                        AppStr.rest to Icons.Default.History
+                    )
+                ) { label ->
+                    val plainMonthlyTxs = monthlyTransactionsWithSplits.map { it.transaction }
+                    when (label) {
+                        AppStr.expPdf -> generatePDF(context, plainMonthlyTxs, currentProfile, selectedMonth, selectedYear)
+                        AppStr.expCsv -> generateCSV(context, plainMonthlyTxs, currentProfile, selectedMonth, selectedYear)
+                        AppStr.expDrive -> exportToDrive(context, plainMonthlyTxs, currentProfile, selectedMonth, selectedYear)
+                        AppStr.backApp -> backupAppToJSON(context, currentProfile, allTransactionsWithSplits)
+                        AppStr.rest -> { mainActivity?.openSafeFilePicker() }
+                    }
+                }
+
+                SettingsGroupCard(
+                    title = AppStr.abt,
+                    modifier = Modifier.weight(1f),
+                    items = listOf(
+                        AppStr.appVer to Icons.Default.Info,
+                        AppStr.priv to Icons.Default.PrivacyTip,
+                        AppStr.trms to Icons.AutoMirrored.Filled.MenuBook,
+                        AppStr.contDev to Icons.Default.SupportAgent
+                    )
+                ) { label ->
+                    when (label) {
+                        AppStr.appVer -> showVersionDialog = true
+                        AppStr.priv -> showPrivacyDialog = true
+                        AppStr.trms -> showTermsDialog = true
+                        AppStr.contDev -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/6285173220524")))
                     }
                 }
             }
         }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 24.dp)
-                .padding(top = 24.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
-            Text(AppStr.set, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    SettingsGroupCard(
-                        title = AppStr.accSec,
-                        modifier = Modifier.weight(1f),
-                        items = listOf(
-                            AppStr.editProf to Icons.Default.Edit,
-                            AppStr.theme to Icons.Default.Palette,
-                            AppStr.appLck to Icons.Default.Fingerprint
-                        ),
-                        hasSwitch = true,
-                        isSwitchOn = currentProfile.isAppLocked,
-                        onSwitchChange = {
-                            isTurningOn = it
-                            showPinDialog = true
+        if (showCatBudgetDialog) {
+            val expenseCatsList = currentProfile.expenseCats.split(",").filter { it.isNotBlank() }
+            var targetMap by remember {
+                mutableStateOf(
+                    try {
+                        val json = JSONObject(currentProfile.categoryTargets)
+                        val map = mutableMapOf<String, Long>()
+                        val keys = json.keys()
+                        while(keys.hasNext()) {
+                            val k = keys.next()
+                            map[k] = json.optLong(k, 0L)
                         }
-                    ) { label ->
-                        when(label) {
-                            AppStr.editProf -> showEditProfileDialog = true
-                            AppStr.theme -> showThemeDialog = true
-                        }
+                        map
+                    } catch (e: Exception) {
+                        mutableMapOf<String, Long>()
                     }
-
-                    SettingsGroupCard(
-                        title = AppStr.finPref,
-                        modifier = Modifier.weight(1f),
-                        items = listOf(
-                            AppStr.cur to Icons.Default.Sync,
-                            AppStr.manageWallet to Icons.Default.AccountBalanceWallet,
-                            AppStr.manageCat to Icons.Default.Category,
-                            AppStr.tar to Icons.Default.Adjust,
-                            AppStr.catBudget to Icons.Default.PieChart
-                        ),
-                        onClick = { label ->
-                            when(label) {
-                                AppStr.cur -> showCurrencyDialog = true
-                                AppStr.manageWallet -> showWalletDialog = true
-                                AppStr.tar -> showTargetDialog = true
-                                AppStr.manageCat -> showCategoryDialog = true
-                                AppStr.catBudget -> showCatBudgetDialog = true
-                            }
-                        }
-                    )
-                }
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(28.dp),
-                    colors = CardDefaults.cardColors(containerColor = AppSurface())
-                ) {
-                    var expandReminders by remember { mutableStateOf(false) }
-
-                    Column(modifier = Modifier.padding(18.dp)) {
-                        Text(
-                            AppStr.notif,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 14.sp,
-                            color = AppText(),
-                            modifier = Modifier.align(Alignment.CenterHorizontally),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(modifier = Modifier.height(18.dp))
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.AccountBalanceWallet, null, tint = AppText(), modifier = Modifier.size(20.dp))
-                            Text(
-                                AppStr.carryOver,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 10.dp),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = AppText(),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Switch(
-                                checked = currentProfile.useCarryOver,
-                                onCheckedChange = { isChecked ->
-                                    scope.launch {
-                                        dao.saveProfile(currentProfile.copy(useCarryOver = isChecked))
-                                        onForceUpdate()
-                                    }
-                                },
-                                modifier = Modifier.scale(0.8f)
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.NotificationsActive, null, tint = AppText(), modifier = Modifier.size(20.dp))
-                            Text(
-                                AppStr.dailyRem,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .padding(horizontal = 10.dp),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = AppText(),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-
-                            if (currentProfile.isReminderOn) {
-                                IconButton(
-                                    onClick = {
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        expandReminders = !expandReminders
-                                    },
-                                    modifier = Modifier.size(28.dp).padding(end = 4.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = if (expandReminders) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                        contentDescription = "Expand",
-                                        tint = AppText()
-                                    )
-                                }
-                            }
-
-                            Switch(
-                                checked = currentProfile.isReminderOn,
-                                onCheckedChange = { isChecked ->
-                                    scope.launch {
-                                        val newProf = currentProfile.copy(isReminderOn = isChecked)
-                                        dao.saveProfile(newProf)
-                                        onForceUpdate()
-                                    }
-                                    if (!isChecked) expandReminders = false
-                                },
-                                modifier = Modifier.scale(0.8f)
-                            )
-                        }
-
-                        if (currentProfile.isReminderOn && expandReminders) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 8.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(AppSurfaceVariant())
-                                    .padding(12.dp)
-                            ) {
-                                val timesList = currentProfile.reminderTimes.split(",")
-                                timesList.forEachIndexed { index, time ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                val parts = time.split(":")
-                                                val hour = parts.getOrNull(0)?.toIntOrNull() ?: 0
-                                                val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
-
-                                                TimePickerDialog(context, { _, h, m ->
-                                                    val newTimes = timesList.toMutableList()
-                                                    newTimes[index] = String.format(Locale.getDefault(), "%02d:%02d", h, m)
-                                                    val newProf = currentProfile.copy(reminderTimes = newTimes.joinToString(","))
-                                                    scope.launch {
-                                                        dao.saveProfile(newProf)
-                                                        onForceUpdate()
-                                                    }
-                                                }, hour, minute, true).show()
-                                            }
-                                            .padding(vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(Icons.Default.AccessTime, null, tint = AppText().copy(alpha=0.7f), modifier = Modifier.size(16.dp))
-                                        Text(
-                                            "${AppStr.rem} ${index + 1}",
-                                            modifier = Modifier.weight(1f).padding(start = 8.dp),
-                                            fontSize = 12.sp,
-                                            color = AppText().copy(alpha=0.8f),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            time,
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = AppPrimary()
-                                        )
-                                    }
-                                    if (index < timesList.size - 1) {
-                                        HorizontalDivider(color = AppText().copy(alpha = 0.1f))
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    SettingsGroupCard(
-                        title = AppStr.dat,
-                        modifier = Modifier.weight(1f),
-                        items = listOf(
-                            AppStr.expPdf to Icons.Default.PictureAsPdf,
-                            AppStr.expCsv to Icons.Default.Description,
-                            AppStr.expDrive to Icons.Default.AddToDrive,
-                            AppStr.backApp to Icons.Default.CloudUpload,
-                            AppStr.rest to Icons.Default.History
-                        )
-                    ) { label ->
-                        val plainMonthlyTxs = monthlyTransactionsWithSplits.map { it.transaction }
-                        when (label) {
-                            AppStr.expPdf -> generatePDF(context, plainMonthlyTxs, currentProfile, selectedMonth, selectedYear)
-                            AppStr.expCsv -> generateCSV(context, plainMonthlyTxs, currentProfile, selectedMonth, selectedYear)
-                            AppStr.expDrive -> exportToDrive(context, plainMonthlyTxs, currentProfile, selectedMonth, selectedYear)
-                            AppStr.backApp -> backupAppToJSON(context, currentProfile, allTransactionsWithSplits)
-                            AppStr.rest -> { mainActivity?.openSafeFilePicker() }
-                        }
-                    }
-
-                    SettingsGroupCard(
-                        title = AppStr.abt,
-                        modifier = Modifier.weight(1f),
-                        items = listOf(
-                            AppStr.appVer to Icons.Default.Info,
-                            AppStr.priv to Icons.Default.PrivacyTip,
-                            AppStr.trms to Icons.AutoMirrored.Filled.MenuBook,
-                            AppStr.contDev to Icons.Default.SupportAgent
-                        )
-                    ) { label ->
-                        when (label) {
-                            AppStr.appVer -> showVersionDialog = true
-                            AppStr.priv -> showPrivacyDialog = true
-                            AppStr.trms -> showTermsDialog = true
-                            AppStr.contDev -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/6285173220524")))
-                        }
-                    }
-                }
-            }
-
-            if (showCatBudgetDialog) {
-                val expenseCatsList = currentProfile.expenseCats.split(",").filter { it.isNotBlank() }
-                var targetMap by remember {
-                    mutableStateOf(
-                        try {
-                            val json = JSONObject(currentProfile.categoryTargets)
-                            val map = mutableMapOf<String, Long>()
-                            val keys = json.keys()
-                            while(keys.hasNext()) {
-                                val k = keys.next()
-                                map[k] = json.optLong(k, 0L)
-                            }
-                            map
-                        } catch (e: Exception) {
-                            mutableMapOf<String, Long>()
-                        }
-                    )
-                }
-                AlertDialog(
-                    onDismissRequest = { showCatBudgetDialog = false },
-                    title = { Text(AppStr.catBudget, fontWeight = FontWeight.Bold) },
-                    text = {
-                        Box(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
-                            Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                                expenseCatsList.forEach { catName ->
-                                    val currentVal = targetMap[catName] ?: 0L
-                                    var inputValue by remember { mutableStateOf(if (currentVal == 0L) "" else currentVal.toString()) }
-                                    OutlinedTextField(
-                                        value = inputValue,
-                                        onValueChange = { input ->
-                                            if (input.isEmpty() || input.all { char -> char.isDigit() }) {
-                                                inputValue = input
-                                                targetMap = targetMap.toMutableMap().apply { put(catName, input.toLongOrNull() ?: 0L) }
-                                            }
-                                        },
-                                        label = { Text(catName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp),
-                                        shape = RoundedCornerShape(12.dp),
-                                        singleLine = true
-                                    )
-                                }
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    val json = JSONObject()
-                                    targetMap.forEach { (k, v) -> json.put(k, v) }
-                                    dao.saveProfile(currentProfile.copy(categoryTargets = json.toString()))
-                                    onForceUpdate()
-                                    showCatBudgetDialog = false
-                                }
-                            }
-                        ) { Text(AppStr.save) }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showCatBudgetDialog = false }) { Text(AppStr.close, color = AppText()) }
-                    },
-                    containerColor = AppSurface()
                 )
             }
+            AlertDialog(
+                onDismissRequest = { showCatBudgetDialog = false },
+                title = { Text(AppStr.catBudget, fontWeight = FontWeight.Bold) },
+                text = {
+                    Box(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
+                        Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                            expenseCatsList.forEach { catName ->
+                                val currentVal = targetMap[catName] ?: 0L
+                                var inputValue by remember { mutableStateOf(if (currentVal == 0L) "" else currentVal.toString()) }
+                                OutlinedTextField(
+                                    value = inputValue,
+                                    onValueChange = { input ->
+                                        if (input.isEmpty() || input.all { char -> char.isDigit() }) {
+                                            inputValue = input
+                                            targetMap = targetMap.toMutableMap().apply { put(catName, input.toLongOrNull() ?: 0L) }
+                                        }
+                                    },
+                                    label = { Text(catName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    singleLine = true
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                val json = JSONObject()
+                                targetMap.forEach { (k, v) -> json.put(k, v) }
+                                dao.saveProfile(currentProfile.copy(categoryTargets = json.toString()))
+                                onForceUpdate()
+                                showCatBudgetDialog = false
+                            }
+                        }
+                    ) { Text(AppStr.save) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showCatBudgetDialog = false }) { Text(AppStr.close, color = AppText()) }
+                },
+                containerColor = AppSurface()
+            )
+        }
 
-            if (showWalletDialog) {
-                var newWalletName by remember { mutableStateOf("") }
-                var activeWallets by remember { mutableStateOf(currentProfile.wallets.split(",").filter { it.isNotBlank() }) }
-                AlertDialog(
-                    onDismissRequest = {
-                        showWalletDialog = false
-                        onForceUpdate()
-                    },
-                    title = { Text(AppStr.manageWallet, fontWeight = FontWeight.Bold) },
-                    text = {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {
-                                items(activeWallets) { w ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text("• $w", color = AppText(), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                                        if (activeWallets.size > 1) {
+        if (showWalletDialog) {
+            var newWalletName by remember { mutableStateOf("") }
+            var activeWallets by remember { mutableStateOf(currentProfile.wallets.split(",").filter { it.isNotBlank() }) }
+            AlertDialog(
+                onDismissRequest = {
+                    showWalletDialog = false
+                    onForceUpdate()
+                },
+                title = { Text(AppStr.manageWallet, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {
+                            items(activeWallets) { w ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("• $w", color = AppText(), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                    if (activeWallets.size > 1) {
+                                        IconButton(
+                                            onClick = {
+                                                val newList = activeWallets.filter { it != w }
+                                                activeWallets = newList
+                                                scope.launch { dao.saveProfile(currentProfile.copy(wallets = newList.joinToString(","))) }
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) { Icon(Icons.Default.Close, null, tint = AppRed()) }
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = newWalletName,
+                                onValueChange = { newWalletName = it },
+                                label = { Text(AppStr.addWallet) },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            IconButton(
+                                onClick = {
+                                    if (newWalletName.isNotBlank() && !activeWallets.contains(newWalletName.trim())) {
+                                        val newList = activeWallets.toMutableList().apply { add(newWalletName.trim()) }
+                                        activeWallets = newList
+                                        scope.launch { dao.saveProfile(currentProfile.copy(wallets = newList.joinToString(","))) }
+                                        newWalletName = ""
+                                    }
+                                },
+                                modifier = Modifier.background(AppPrimary(), CircleShape)
+                            ) { Icon(Icons.Default.Add, null, tint = Color.White) }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showWalletDialog = false
+                            onForceUpdate()
+                        }
+                    ) { Text(AppStr.close) }
+                }
+            )
+        }
+
+        if (showCategoryDialog) {
+            var isIncomeTab by remember { mutableStateOf(false) }
+            var newCatName by remember { mutableStateOf("") }
+            var activeIncomeCats by remember { mutableStateOf(currentProfile.incomeCats.split(",").filter { it.isNotBlank() }) }
+            var activeExpenseCats by remember { mutableStateOf(currentProfile.expenseCats.split(",").filter { it.isNotBlank() }) }
+
+            var selectedIconKey by remember { mutableStateOf("Kategori") }
+            var editingCatOldName by remember { mutableStateOf<String?>(null) }
+
+            AlertDialog(
+                onDismissRequest = {
+                    showCategoryDialog = false
+                    onForceUpdate()
+                },
+                title = { Text(AppStr.manageCat, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(AppSurfaceVariant())
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (!isIncomeTab) AppRed() else Color.Transparent)
+                                    .clickable {
+                                        isIncomeTab = false
+                                        editingCatOldName = null
+                                        newCatName = ""
+                                        selectedIconKey = "Kategori"
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) { Text(AppStr.exp, color = if (!isIncomeTab) Color.White else AppText(), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isIncomeTab) AppGreen() else Color.Transparent)
+                                    .clickable {
+                                        isIncomeTab = true
+                                        editingCatOldName = null
+                                        newCatName = ""
+                                        selectedIconKey = "Kategori"
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) { Text(AppStr.inc, color = if (isIncomeTab) Color.White else AppText(), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        val currentList = if (isIncomeTab) activeIncomeCats else activeExpenseCats
+
+                        LazyColumn(modifier = Modifier.heightIn(max = 120.dp)) {
+                            items(currentList) { cat ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("• $cat", color = AppText(), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+
+                                    Row {
+                                        IconButton(
+                                            onClick = {
+                                                editingCatOldName = cat
+                                                newCatName = cat
+                                                val iconJson = try { JSONObject(currentProfile.categoryIcons) } catch (e: Exception) { JSONObject() }
+                                                selectedIconKey = iconJson.optString(cat, "Kategori")
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) { Icon(Icons.Default.Edit, null, tint = AppPrimary()) }
+
+                                        if (currentList.size > 1) {
+                                            Spacer(modifier = Modifier.width(8.dp))
                                             IconButton(
                                                 onClick = {
-                                                    val newList = activeWallets.filter { it != w }
-                                                    activeWallets = newList
-                                                    scope.launch { dao.saveProfile(currentProfile.copy(wallets = newList.joinToString(","))) }
+                                                    if (isIncomeTab) {
+                                                        val newList = activeIncomeCats.filter { it != cat }
+                                                        activeIncomeCats = newList
+                                                        scope.launch { dao.saveProfile(currentProfile.copy(incomeCats = newList.joinToString(","))) }
+                                                    } else {
+                                                        val newList = activeExpenseCats.filter { it != cat }
+                                                        activeExpenseCats = newList
+                                                        scope.launch { dao.saveProfile(currentProfile.copy(expenseCats = newList.joinToString(","))) }
+                                                    }
                                                 },
                                                 modifier = Modifier.size(24.dp)
                                             ) { Icon(Icons.Default.Close, null, tint = AppRed()) }
@@ -3080,518 +2640,379 @@ fun DrawScope.drawTrendsArea(points: List<Float>, color: Color) {
                                     }
                                 }
                             }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                OutlinedTextField(
-                                    value = newWalletName,
-                                    onValueChange = { newWalletName = it },
-                                    label = { Text(AppStr.addWallet) },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                IconButton(
-                                    onClick = {
-                                        if (newWalletName.isNotBlank() && !activeWallets.contains(newWalletName.trim())) {
-                                            val newList = activeWallets.toMutableList().apply { add(newWalletName.trim()) }
-                                            activeWallets = newList
-                                            scope.launch { dao.saveProfile(currentProfile.copy(wallets = newList.joinToString(","))) }
-                                            newWalletName = ""
-                                        }
-                                    },
-                                    modifier = Modifier.background(AppPrimary(), CircleShape)
-                                ) { Icon(Icons.Default.Add, null, tint = Color.White) }
-                            }
                         }
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                showWalletDialog = false
-                                onForceUpdate()
-                            }
-                        ) { Text(AppStr.close) }
-                    }
-                )
-            }
 
-            if (showCategoryDialog) {
-                var isIncomeTab by remember { mutableStateOf(false) }
-                var newCatName by remember { mutableStateOf("") }
-                var activeIncomeCats by remember { mutableStateOf(currentProfile.incomeCats.split(",").filter { it.isNotBlank() }) }
-                var activeExpenseCats by remember { mutableStateOf(currentProfile.expenseCats.split(",").filter { it.isNotBlank() }) }
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                var selectedIconKey by remember { mutableStateOf("Kategori") }
-                var editingCatOldName by remember { mutableStateOf<String?>(null) }
-
-                AlertDialog(
-                    onDismissRequest = {
-                        showCategoryDialog = false
-                        onForceUpdate()
-                    },
-                    title = { Text(AppStr.manageCat, fontWeight = FontWeight.Bold) },
-                    text = {
                         Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(40.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(AppSurfaceVariant())
+                            if (editingCatOldName != null) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
+                                    Text("Editing: $editingCatOldName", fontSize = 10.sp, color = AppPrimary(), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Cancel", fontSize = 10.sp, color = AppRed(), fontWeight = FontWeight.Bold, modifier = Modifier.clickable {
+                                        editingCatOldName = null
+                                        newCatName = ""
+                                        selectedIconKey = "Kategori"
+                                    })
+                                }
+                            }
+
+                            OutlinedTextField(
+                                value = newCatName,
+                                onValueChange = { newCatName = it },
+                                label = { Text(AppStr.catName) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(AppStr.chooseCatIcon, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = AppText())
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(5),
+                                modifier = Modifier.height(120.dp).clip(RoundedCornerShape(8.dp)).background(AppSurfaceVariant())
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (!isIncomeTab) AppRed() else Color.Transparent)
-                                        .clickable {
-                                            isIncomeTab = false
-                                            editingCatOldName = null
-                                            newCatName = ""
-                                            selectedIconKey = "Kategori"
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) { Text(AppStr.exp, color = if (!isIncomeTab) Color.White else AppText(), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxHeight()
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (isIncomeTab) AppGreen() else Color.Transparent)
-                                        .clickable {
-                                            isIncomeTab = true
-                                            editingCatOldName = null
-                                            newCatName = ""
-                                            selectedIconKey = "Kategori"
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) { Text(AppStr.inc, color = if (isIncomeTab) Color.White else AppText(), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-                            }
-
-                            Spacer(modifier = Modifier.height(16.dp))
-                            val currentList = if (isIncomeTab) activeIncomeCats else activeExpenseCats
-
-                            LazyColumn(modifier = Modifier.heightIn(max = 120.dp)) {
-                                items(currentList) { cat ->
-                                    Row(
+                                items(kumaIconLibrary.keys.toList()) { key ->
+                                    val icon = kumaIconLibrary[key]!!
+                                    Box(
                                         modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(vertical = 4.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                            .padding(4.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (selectedIconKey == key) AppPrimary() else Color.Transparent)
+                                            .clickable {
+                                                selectedIconKey = key
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            }
+                                            .padding(8.dp),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Text("• $cat", color = AppText(), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-
-                                        Row {
-                                            IconButton(
-                                                onClick = {
-                                                    editingCatOldName = cat
-                                                    newCatName = cat
-                                                    val iconJson = try { JSONObject(currentProfile.categoryIcons) } catch (e: Exception) { JSONObject() }
-                                                    selectedIconKey = iconJson.optString(cat, "Kategori")
-                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                },
-                                                modifier = Modifier.size(24.dp)
-                                            ) { Icon(Icons.Default.Edit, null, tint = AppPrimary()) }
-
-                                            if (currentList.size > 1) {
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                IconButton(
-                                                    onClick = {
-                                                        if (isIncomeTab) {
-                                                            val newList = activeIncomeCats.filter { it != cat }
-                                                            activeIncomeCats = newList
-                                                            scope.launch { dao.saveProfile(currentProfile.copy(incomeCats = newList.joinToString(","))) }
-                                                        } else {
-                                                            val newList = activeExpenseCats.filter { it != cat }
-                                                            activeExpenseCats = newList
-                                                            scope.launch { dao.saveProfile(currentProfile.copy(expenseCats = newList.joinToString(","))) }
-                                                        }
-                                                    },
-                                                    modifier = Modifier.size(24.dp)
-                                                ) { Icon(Icons.Default.Close, null, tint = AppRed()) }
-                                            }
-                                        }
+                                        Icon(icon, contentDescription = key, tint = if (selectedIconKey == key) Color.White else AppText(), modifier = Modifier.size(20.dp))
                                     }
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
 
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                if (editingCatOldName != null) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 4.dp)) {
-                                        Text("Editing: $editingCatOldName", fontSize = 10.sp, color = AppPrimary(), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Cancel", fontSize = 10.sp, color = AppRed(), fontWeight = FontWeight.Bold, modifier = Modifier.clickable {
-                                            editingCatOldName = null
-                                            newCatName = ""
-                                            selectedIconKey = "Kategori"
-                                        })
-                                    }
-                                }
+                            Button(
+                                onClick = {
+                                    if (newCatName.isNotBlank()) {
+                                        val newCat = newCatName.trim()
+                                        val iconJson = try { JSONObject(currentProfile.categoryIcons) } catch (e: Exception) { JSONObject() }
 
-                                OutlinedTextField(
-                                    value = newCatName,
-                                    onValueChange = { newCatName = it },
-                                    label = { Text(AppStr.catName) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(AppStr.chooseCatIcon, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = AppText())
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                LazyVerticalGrid(
-                                    columns = GridCells.Fixed(5),
-                                    modifier = Modifier.height(120.dp).clip(RoundedCornerShape(8.dp)).background(AppSurfaceVariant())
-                                ) {
-                                    items(kumaIconLibrary.keys.toList()) { key ->
-                                        val icon = kumaIconLibrary[key]!!
-                                        Box(
-                                            modifier = Modifier
-                                                .padding(4.dp)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(if (selectedIconKey == key) AppPrimary() else Color.Transparent)
-                                                .clickable {
-                                                    selectedIconKey = key
-                                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                }
-                                                .padding(8.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(icon, contentDescription = key, tint = if (selectedIconKey == key) Color.White else AppText(), modifier = Modifier.size(20.dp))
+                                        if (editingCatOldName != null && editingCatOldName != newCat) {
+                                            iconJson.remove(editingCatOldName)
                                         }
-                                    }
-                                }
+                                        iconJson.put(newCat, selectedIconKey)
 
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                Button(
-                                    onClick = {
-                                        if (newCatName.isNotBlank()) {
-                                            val newCat = newCatName.trim()
-                                            val iconJson = try { JSONObject(currentProfile.categoryIcons) } catch (e: Exception) { JSONObject() }
-
-                                            if (editingCatOldName != null && editingCatOldName != newCat) {
-                                                iconJson.remove(editingCatOldName)
+                                        if (isIncomeTab) {
+                                            val newList = activeIncomeCats.toMutableList()
+                                            if (editingCatOldName != null) {
+                                                val idx = newList.indexOf(editingCatOldName)
+                                                if (idx != -1) newList[idx] = newCat
+                                            } else if (!newList.contains(newCat)) {
+                                                newList.add(newCat)
                                             }
-                                            iconJson.put(newCat, selectedIconKey)
-
-                                            if (isIncomeTab) {
-                                                val newList = activeIncomeCats.toMutableList()
-                                                if (editingCatOldName != null) {
-                                                    val idx = newList.indexOf(editingCatOldName)
-                                                    if (idx != -1) newList[idx] = newCat
-                                                } else if (!newList.contains(newCat)) {
-                                                    newList.add(newCat)
-                                                }
-                                                activeIncomeCats = newList
-                                                scope.launch { dao.saveProfile(currentProfile.copy(incomeCats = newList.joinToString(","), categoryIcons = iconJson.toString())) }
-                                            } else {
-                                                val newList = activeExpenseCats.toMutableList()
-                                                if (editingCatOldName != null) {
-                                                    val idx = newList.indexOf(editingCatOldName)
-                                                    if (idx != -1) newList[idx] = newCat
-                                                } else if (!newList.contains(newCat)) {
-                                                    newList.add(newCat)
-                                                }
-                                                activeExpenseCats = newList
-                                                scope.launch { dao.saveProfile(currentProfile.copy(expenseCats = newList.joinToString(","), categoryIcons = iconJson.toString())) }
+                                            activeIncomeCats = newList
+                                            scope.launch { dao.saveProfile(currentProfile.copy(incomeCats = newList.joinToString(","), categoryIcons = iconJson.toString())) }
+                                        } else {
+                                            val newList = activeExpenseCats.toMutableList()
+                                            if (editingCatOldName != null) {
+                                                val idx = newList.indexOf(editingCatOldName)
+                                                if (idx != -1) newList[idx] = newCat
+                                            } else if (!newList.contains(newCat)) {
+                                                newList.add(newCat)
                                             }
-                                            newCatName = ""
-                                            selectedIconKey = "Kategori"
-                                            editingCatOldName = null
-                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            activeExpenseCats = newList
+                                            scope.launch { dao.saveProfile(currentProfile.copy(expenseCats = newList.joinToString(","), categoryIcons = iconJson.toString())) }
                                         }
-                                    },
-                                    modifier = Modifier.fillMaxWidth().height(45.dp),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) { Text(if (editingCatOldName != null) AppStr.save else AppStr.addCat) }
-                            }
+                                        newCatName = ""
+                                        selectedIconKey = "Kategori"
+                                        editingCatOldName = null
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().height(45.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) { Text(if (editingCatOldName != null) AppStr.save else AppStr.addCat) }
                         }
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                showCategoryDialog = false
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showCategoryDialog = false
+                            onForceUpdate()
+                        }
+                    ) { Text(AppStr.close) }
+                }
+            )
+        }
+
+        if (showEditProfileDialog) {
+            AlertDialog(
+                onDismissRequest = { showEditProfileDialog = false },
+                title = { Text(AppStr.editProf, fontWeight = FontWeight.Bold) },
+                text = {
+                    OutlinedTextField(
+                        value = newName,
+                        onValueChange = { newName = it },
+                        label = { Text(AppStr.usr) },
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                dao.saveProfile(currentProfile.copy(userName = newName))
                                 onForceUpdate()
-                            }
-                        ) { Text(AppStr.close) }
-                    }
-                )
-            }
-
-            if (showEditProfileDialog) {
-                AlertDialog(
-                    onDismissRequest = { showEditProfileDialog = false },
-                    title = { Text(AppStr.editProf, fontWeight = FontWeight.Bold) },
-                    text = {
-                        OutlinedTextField(
-                            value = newName,
-                            onValueChange = { newName = it },
-                            label = { Text(AppStr.usr) },
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    dao.saveProfile(currentProfile.copy(userName = newName))
-                                    onForceUpdate()
-                                    showEditProfileDialog = false
-                                }
-                            }
-                        ) { Text(AppStr.save) }
-                    }
-                )
-            }
-
-            if (showCurrencyDialog) {
-                AlertDialog(
-                    onDismissRequest = { showCurrencyDialog = false },
-                    title = { Text(AppStr.selCur) },
-                    text = {
-                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                            listOf("IDR", "USD", "EUR", "JPY", "GBP", "AUD", "CAD", "CHF", "CNY", "SGD").forEach { c ->
-                                TextButton(
-                                    onClick = {
-                                        scope.launch {
-                                            dao.saveProfile(currentProfile.copy(currency = c))
-                                            onForceUpdate()
-                                            showCurrencyDialog = false
-                                        }
-                                    }
-                                ) { Text(c) }
+                                showEditProfileDialog = false
                             }
                         }
-                    },
-                    confirmButton = {}
-                )
-            }
+                    ) { Text(AppStr.save) }
+                }
+            )
+        }
 
-            if (showTargetDialog) {
-                AlertDialog(
-                    onDismissRequest = { showTargetDialog = false },
-                    title = { Text(AppStr.setTar) },
-                    text = {
-                        OutlinedTextField(
-                            value = targetInput,
-                            onValueChange = { if (it.all { c -> c.isDigit() }) targetInput = it },
-                            label = { Text(AppStr.limExp) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                        )
-                    },
-                    confirmButton = {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    dao.saveProfile(currentProfile.copy(monthlyTarget = targetInput.toLongOrNull() ?: 0L))
-                                    onForceUpdate()
-                                    showTargetDialog = false
+        if (showCurrencyDialog) {
+            AlertDialog(
+                onDismissRequest = { showCurrencyDialog = false },
+                title = { Text(AppStr.selCur) },
+                text = {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        listOf("IDR", "USD", "EUR", "JPY", "GBP", "AUD", "CAD", "CHF", "CNY", "SGD").forEach { c ->
+                            TextButton(
+                                onClick = {
+                                    scope.launch {
+                                        dao.saveProfile(currentProfile.copy(currency = c))
+                                        onForceUpdate()
+                                        showCurrencyDialog = false
+                                    }
                                 }
-                            }
-                        ) { Text(AppStr.btnSet) }
+                            ) { Text(c) }
+                        }
                     }
-                )
-            }
+                },
+                confirmButton = {}
+            )
+        }
 
-            if (showThemeDialog) {
-                AlertDialog(
-                    onDismissRequest = { showThemeDialog = false },
-                    title = { Text(AppStr.theme) },
-                    text = {
-                        Column {
-                            val currentMonth = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH)
-                            val isJune = currentMonth == java.util.Calendar.JUNE
-                            val hasPride = currentProfile.userName.contains("#pride", ignoreCase = true)
-                            val hasBear = currentProfile.userName.contains("#bear", ignoreCase = true)
-
-                            val themeOptions = mutableListOf(
-                                0 to AppStr.themeSys,
-                                1 to AppStr.themeLight,
-                                2 to AppStr.themeDark
-                            )
-
-                            if (isJune) {
-                                if (hasPride) {
-                                    themeOptions.add(3 to "Pride Light \uD83C\uDFF3\uFE0F\u200D\uD83C\uDF08")
-                                    themeOptions.add(4 to "Pride Dark \uD83C\uDFF3\uFE0F\u200D\uD83C\uDF08")
-                                }
-                                if (hasBear) {
-                                    themeOptions.add(5 to "Bear Light \uD83D\uDC3B")
-                                    themeOptions.add(6 to "Bear Dark \uD83D\uDC3B")
-                                }
+        if (showTargetDialog) {
+            AlertDialog(
+                onDismissRequest = { showTargetDialog = false },
+                title = { Text(AppStr.setTar) },
+                text = {
+                    OutlinedTextField(
+                        value = targetInput,
+                        onValueChange = { if (it.all { c -> c.isDigit() }) targetInput = it },
+                        label = { Text(AppStr.limExp) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                dao.saveProfile(currentProfile.copy(monthlyTarget = targetInput.toLongOrNull() ?: 0L))
+                                onForceUpdate()
+                                showTargetDialog = false
                             }
+                        }
+                    ) { Text(AppStr.btnSet) }
+                }
+            )
+        }
 
-                            themeOptions.forEach { (value, label) ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            scope.launch {
-                                                dao.saveProfile(currentProfile.copy(themeMode = value))
-                                                onForceUpdate()
-                                            }
-                                        }
-                                        .padding(vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(selected = currentProfile.themeMode == value, onClick = null)
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Text(label, color = AppText(), fontWeight = if (value > 2) FontWeight.ExtraBold else FontWeight.Normal)
-                                }
+        if (showThemeDialog) {
+            AlertDialog(
+                onDismissRequest = { showThemeDialog = false },
+                title = { Text(AppStr.theme) },
+                text = {
+                    Column {
+                        val currentMonth = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH)
+                        val isJune = currentMonth == java.util.Calendar.JUNE
+                        val hasPride = currentProfile.userName.contains("#pride", ignoreCase = true)
+                        val hasBear = currentProfile.userName.contains("#bear", ignoreCase = true)
+
+                        val themeOptions = mutableListOf(
+                            0 to AppStr.themeSys,
+                            1 to AppStr.themeLight,
+                            2 to AppStr.themeDark
+                        )
+
+                        if (isJune) {
+                            if (hasPride) {
+                                themeOptions.add(3 to "Pride Light \uD83C\uDFF3\uFE0F\u200D\uD83C\uDF08")
+                                themeOptions.add(4 to "Pride Dark \uD83C\uDFF3\uFE0F\u200D\uD83C\uDF08")
                             }
+                            if (hasBear) {
+                                themeOptions.add(5 to "Bear Light \uD83D\uDC3B")
+                                themeOptions.add(6 to "Bear Dark \uD83D\uDC3B")
+                            }
+                        }
 
-                            HorizontalDivider(
-                                modifier = Modifier.padding(vertical = 8.dp),
-                                color = AppSurfaceVariant()
-                            )
-
+                        themeOptions.forEach { (value, label) ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
+                                    .clickable {
+                                        scope.launch {
+                                            dao.saveProfile(currentProfile.copy(themeMode = value))
+                                            onForceUpdate()
+                                        }
+                                    }
+                                    .padding(vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier
-                                    .weight(1f)
-                                    .padding(start = 12.dp)) {
-                                    Text(AppStr.amoledDark, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppText())
-                                    Text(AppStr.amoledDesc, fontSize = 10.sp, color = AppText().copy(alpha=0.6f))
-                                }
-                                Switch(
-                                    checked = currentProfile.isAmoledMode,
-                                    onCheckedChange = { isChecked ->
-                                        scope.launch {
-                                            dao.saveProfile(currentProfile.copy(isAmoledMode = isChecked))
-                                            onForceUpdate()
-                                        }
-                                    },
-                                    modifier = Modifier.scale(0.8f)
-                                )
+                                RadioButton(selected = currentProfile.themeMode == value, onClick = null)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(label, color = AppText(), fontWeight = if (value > 2) FontWeight.ExtraBold else FontWeight.Normal)
                             }
                         }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = { showThemeDialog = false }) { Text(AppStr.close) }
-                    }
-                )
-            }
 
-            if (showPinDialog) {
-                AlertDialog(
-                    onDismissRequest = { showPinDialog = false; pinInput = "" },
-                    title = { Text(if(isTurningOn) AppStr.setPin else AppStr.confPin) },
-                    text = {
-                        OutlinedTextField(
-                            value = pinInput,
-                            onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) pinInput = it },
-                            label = { Text("PIN") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                            shape = RoundedCornerShape(12.dp)
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            color = AppSurfaceVariant()
                         )
-                    },
-                    confirmButton = {
-                        Button(
-                            enabled = pinInput.length == 6,
-                            onClick = {
-                                when {
-                                    isTurningOn -> {
-                                        scope.launch {
-                                            dao.saveProfile(currentProfile.copy(isAppLocked = true, appPin = pinInput))
-                                            showPinDialog = false
-                                            pinInput = ""
-                                            Toast.makeText(context, AppStr.pinAct, Toast.LENGTH_SHORT).show()
-                                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 12.dp)) {
+                                Text(AppStr.amoledDark, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppText())
+                                Text(AppStr.amoledDesc, fontSize = 10.sp, color = AppText().copy(alpha=0.6f))
+                            }
+                            Switch(
+                                checked = currentProfile.isAmoledMode,
+                                onCheckedChange = { isChecked ->
+                                    scope.launch {
+                                        dao.saveProfile(currentProfile.copy(isAmoledMode = isChecked))
+                                        onForceUpdate()
                                     }
-                                    pinInput == currentProfile.appPin -> {
-                                        scope.launch {
-                                            dao.saveProfile(currentProfile.copy(isAppLocked = false))
-                                            showPinDialog = false
-                                            pinInput = ""
-                                            Toast.makeText(context, AppStr.pinDeact, Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                    else -> {
-                                        Toast.makeText(context, AppStr.wrongPin, Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.scale(0.8f)
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showThemeDialog = false }) { Text(AppStr.close) }
+                }
+            )
+        }
+
+        if (showPinDialog) {
+            AlertDialog(
+                onDismissRequest = { showPinDialog = false; pinInput = "" },
+                title = { Text(if(isTurningOn) AppStr.setPin else AppStr.confPin) },
+                text = {
+                    OutlinedTextField(
+                        value = pinInput,
+                        onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) pinInput = it },
+                        label = { Text("PIN") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        enabled = pinInput.length == 6,
+                        onClick = {
+                            when {
+                                isTurningOn -> {
+                                    scope.launch {
+                                        dao.saveProfile(currentProfile.copy(isAppLocked = true, appPin = pinInput))
+                                        showPinDialog = false
+                                        pinInput = ""
+                                        Toast.makeText(context, AppStr.pinAct, Toast.LENGTH_SHORT).show()
                                     }
                                 }
+                                pinInput == currentProfile.appPin -> {
+                                    scope.launch {
+                                        dao.saveProfile(currentProfile.copy(isAppLocked = false))
+                                        showPinDialog = false
+                                        pinInput = ""
+                                        Toast.makeText(context, AppStr.pinDeact, Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                                else -> {
+                                    Toast.makeText(context, AppStr.wrongPin, Toast.LENGTH_SHORT).show()
+                                }
                             }
-                        ) { Text("OK") }
-                    }
-                )
-            }
-
-            if (showVersionDialog) {
-                AlertDialog(
-                    onDismissRequest = { showVersionDialog = false },
-                    title = { Text(AppStr.info, fontWeight = FontWeight.Bold) },
-                    text = { Text(AppStr.versionInfo) },
-                    confirmButton = { TextButton(onClick = { showVersionDialog = false }) { Text(AppStr.close) } },
-                    shape = RoundedCornerShape(24.dp),
-                    containerColor = AppBg()
-                )
-            }
-
-            if (showPrivacyDialog) {
-                AlertDialog(
-                    onDismissRequest = { showPrivacyDialog = false },
-                    title = { Text(AppStr.priv, fontWeight = FontWeight.Bold) },
-                    text = {
-                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                            Text(AppStr.privDesc)
                         }
-                    },
-                    confirmButton = { TextButton(onClick = { showPrivacyDialog = false }) { Text(AppStr.gotIt) } },
-                    shape = RoundedCornerShape(24.dp),
-                    containerColor = AppBg()
-                )
-            }
-
-            if (showTermsDialog) {
-                AlertDialog(
-                    onDismissRequest = { showTermsDialog = false },
-                    title = { Text(AppStr.trms, fontWeight = FontWeight.Bold) },
-                    text = {
-                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                            Text(AppStr.termDesc)
-                        }
-                    },
-                    confirmButton = { TextButton(onClick = { showTermsDialog = false }) { Text(AppStr.agree) } },
-                    shape = RoundedCornerShape(24.dp),
-                    containerColor = AppBg()
-                )
-            }
-
-            Spacer(modifier = Modifier.height(50.dp))
-
-            val easterEggEmoji = when (currentProfile.themeMode) {
-                3, 4 -> " \uD83C\uDFF3\uFE0F\u200D\uD83C\uDF08"
-                5, 6 -> " \uD83D\uDC3B"
-                else -> ""
-            }
-
-            Text(
-                text = "KumaFlow ${AppStr.VERSION}$easterEggEmoji\nLocal Data Only • Privacy First",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 24.dp),
-                textAlign = TextAlign.Center,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = AppText().copy(alpha = 0.5f)
+                    ) { Text("OK") }
+                }
             )
-            Spacer(modifier = Modifier.height(100.dp))
         }
-    } // Ini kurung penutup fungsi SettingsScreen ya, awas kehapus wkwk
+
+        if (showVersionDialog) {
+            AlertDialog(
+                onDismissRequest = { showVersionDialog = false },
+                title = { Text(AppStr.info, fontWeight = FontWeight.Bold) },
+                text = { Text(AppStr.versionInfo) },
+                confirmButton = { TextButton(onClick = { showVersionDialog = false }) { Text(AppStr.close) } },
+                shape = RoundedCornerShape(24.dp),
+                containerColor = AppBg()
+            )
+        }
+
+        if (showPrivacyDialog) {
+            AlertDialog(
+                onDismissRequest = { showPrivacyDialog = false },
+                title = { Text(AppStr.priv, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        Text(AppStr.privDesc)
+                    }
+                },
+                confirmButton = { TextButton(onClick = { showPrivacyDialog = false }) { Text(AppStr.gotIt) } },
+                shape = RoundedCornerShape(24.dp),
+                containerColor = AppBg()
+            )
+        }
+
+        if (showTermsDialog) {
+            AlertDialog(
+                onDismissRequest = { showTermsDialog = false },
+                title = { Text(AppStr.trms, fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        Text(AppStr.termDesc)
+                    }
+                },
+                confirmButton = { TextButton(onClick = { showTermsDialog = false }) { Text(AppStr.agree) } },
+                shape = RoundedCornerShape(24.dp),
+                containerColor = AppBg()
+            )
+        }
+
+        Spacer(modifier = Modifier.height(50.dp))
+
+        val easterEggEmoji = when (currentProfile.themeMode) {
+            3, 4 -> " \uD83C\uDFF3\uFE0F\u200D\uD83C\uDF08"
+            5, 6 -> " \uD83D\uDC3B"
+            else -> ""
+        }
+
+        Text(
+            text = "KumaFlow ${AppStr.VERSION}$easterEggEmoji\nLocal Data Only • Privacy First",
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp),
+            textAlign = TextAlign.Center,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = AppText().copy(alpha = 0.5f)
+        )
+        Spacer(modifier = Modifier.height(100.dp))
+    }
+} // Ini kurung penutup fungsi SettingsScreen ya, awas kehapus wkwk
 
 // --- 6. SHARED COMPONENTS (AutoSizeText, PDF, CSV, Item) ---
 
@@ -3861,129 +3282,129 @@ fun backupAppToJSON(context: Context, profile: UserProfile, txsWithSplits: List<
     }
 }
 
-    @Composable
-    fun SettingsGroupCard(
-        title: String,
-        modifier: Modifier = Modifier,
-        items: List<Pair<String, ImageVector>>,
-        hasSwitch: Boolean = false,
-        isSwitchOn: Boolean = false,
-        onSwitchChange: (Boolean) -> Unit = {},
-        onClick: (String) -> Unit
+@Composable
+fun SettingsGroupCard(
+    title: String,
+    modifier: Modifier = Modifier,
+    items: List<Pair<String, ImageVector>>,
+    hasSwitch: Boolean = false,
+    isSwitchOn: Boolean = false,
+    onSwitchChange: (Boolean) -> Unit = {},
+    onClick: (String) -> Unit
+) {
+    Card(
+        modifier = modifier.heightIn(min = 230.dp),
+        shape = RoundedCornerShape(28.dp),
+        colors = CardDefaults.cardColors(containerColor = AppSurface())
     ) {
-        Card(
-            modifier = modifier.heightIn(min = 230.dp),
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = AppSurface())
-        ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                Text(
-                    title,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 14.sp,
-                    color = AppText(),
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(18.dp))
-                items.forEach { (label, icon) ->
-                    Row(
+        Column(modifier = Modifier.padding(18.dp)) {
+            Text(
+                title,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 14.sp,
+                color = AppText(),
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(18.dp))
+            items.forEach { (label, icon) ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp)
+                        .clickable { onClick(label) },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(icon, null, tint = AppText(), modifier = Modifier.size(20.dp))
+                    Text(
+                        label,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 6.dp)
-                            .clickable { onClick(label) },
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(icon, null, tint = AppText(), modifier = Modifier.size(20.dp))
-                        Text(
-                            label,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(start = 10.dp),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = AppText(),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            .weight(1f)
+                            .padding(start = 10.dp),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AppText(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (hasSwitch && label == AppStr.appLck) {
+                        Switch(
+                            checked = isSwitchOn,
+                            onCheckedChange = onSwitchChange,
+                            modifier = Modifier.scale(0.6f)
                         )
-                        if (hasSwitch && label == AppStr.appLck) {
-                            Switch(
-                                checked = isSwitchOn,
-                                onCheckedChange = onSwitchChange,
-                                modifier = Modifier.scale(0.6f)
-                            )
-                        }
                     }
                 }
             }
         }
     }
+}
 
-    @Composable
-    fun CustomBottomNav(
-        selectedIndex: Int,
-        haptic: androidx.compose.ui.hapticfeedback.HapticFeedback,
-        onItemSelected: (Int) -> Unit
+@Composable
+fun CustomBottomNav(
+    selectedIndex: Int,
+    haptic: androidx.compose.ui.hapticfeedback.HapticFeedback,
+    onItemSelected: (Int) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 20.dp)
+            .height(85.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(AppSurface())
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 20.dp)
-                .height(85.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(AppSurface())
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.SpaceAround,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                NavItem(Icons.Rounded.Home, AppStr.home, selectedIndex == 0) {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onItemSelected(0)
-                }
-                NavItem(Icons.Rounded.Equalizer, AppStr.rep, selectedIndex == 1) {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onItemSelected(1)
-                }
-                NavItem(Icons.Rounded.Settings, AppStr.set, selectedIndex == 2) {
-                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    onItemSelected(2)
-                }
+            NavItem(Icons.Rounded.Home, AppStr.home, selectedIndex == 0) {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onItemSelected(0)
+            }
+            NavItem(Icons.Rounded.Equalizer, AppStr.rep, selectedIndex == 1) {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onItemSelected(1)
+            }
+            NavItem(Icons.Rounded.Settings, AppStr.set, selectedIndex == 2) {
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onItemSelected(2)
             }
         }
     }
+}
 
-    @Composable
-    fun NavItem(
-        icon: ImageVector,
-        label: String,
-        isSelected: Boolean,
-        onClick: () -> Unit
+@Composable
+fun NavItem(
+    icon: ImageVector,
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable { onClick() }
+            .widthIn(max = 80.dp) // Biar kaga nabrak menu sebelahnya
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .clickable { onClick() }
-                .widthIn(max = 80.dp) // Biar kaga nabrak menu sebelahnya
-        ) {
-            Icon(
-                icon,
-                null,
-                tint = if (isSelected) AppText() else AppText().copy(alpha = 0.5f),
-                modifier = Modifier.size(32.dp)
-            )
-            Text(
-                label,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isSelected) AppText() else AppText().copy(alpha = 0.5f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        Icon(
+            icon,
+            null,
+            tint = if (isSelected) AppText() else AppText().copy(alpha = 0.5f),
+            modifier = Modifier.size(32.dp)
+        )
+        Text(
+            label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (isSelected) AppText() else AppText().copy(alpha = 0.5f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
+}
 
 @Composable
 fun IncomeExpensePill(label: String, amount: String, color: Color, isUp: Boolean) {
@@ -4133,14 +3554,14 @@ fun TransactionItem(
                     )
 
                     // --- DEBUG AREA ---
-                   /*
-                    Text(
-                        text = "DEBUG TS: ${trans.timestamp}",
-                        fontSize = 8.sp,
-                        color = Color.Yellow,
-                        fontWeight = FontWeight.Bold
-                    )
-                    */
+                    /*
+                     Text(
+                         text = "DEBUG TS: ${trans.timestamp}",
+                         fontSize = 8.sp,
+                         color = Color.Yellow,
+                         fontWeight = FontWeight.Bold
+                     )
+                     */
                     // ------------------
 
                     if (trans.message.isNotEmpty()) {
@@ -4276,5 +3697,3 @@ fun checkAndApplyPrideEasterEgg(context: android.content.Context, userName: Stri
     }
 
 }
-}
-
