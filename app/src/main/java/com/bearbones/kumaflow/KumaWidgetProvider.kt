@@ -20,7 +20,7 @@ import kotlin.math.abs
 class KumaWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
-        // Tiap ada request update, panggil fungsi sinkronisasi
+        // Sync widget data on every update request
         appWidgetIds.forEach { widgetId ->
             updateWidget(context, appWidgetManager, widgetId)
         }
@@ -28,7 +28,7 @@ class KumaWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        // INI DIA JALUR BELAKANGNYA! Nangkap teriakan dari MainActivity
+        // Intercept broadcast actions emitted by MainActivity for manual updates
         if (intent.action == "com.bearbones.kumaflow.UPDATE_WIDGET") {
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val ids = appWidgetManager.getAppWidgetIds(ComponentName(context, KumaWidgetProvider::class.java))
@@ -39,18 +39,18 @@ class KumaWidgetProvider : AppWidgetProvider() {
     private fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, widgetId: Int) {
         val views = RemoteViews(context.packageName, R.layout.widget_kumaflow)
 
-        // Bikin widget bisa diklik buat buka KumaFlow
+        // Set onClick listener to launch the main application interface
         val intent = Intent(context, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         views.setOnClickPendingIntent(R.id.tv_widget_balance, pendingIntent)
 
-        // Tarik data di background
+        // Fetch application data asynchronously in the background
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val db = KumaDatabase.getDatabase(context)
                 val profile = db.transactionDao().getUserProfile().firstOrNull() ?: return@launch
 
-                // TABOK SISTEM: Pake query DAO yang baru (WithSplits)
+                // Utilize the updated DAO query (WithSplits) for complex transaction structures
                 val transactionsWithSplits = db.transactionDao().getAllTransactionsWithSplits().firstOrNull() ?: emptyList()
 
                 val locale = Locale.forLanguageTag("id-ID")
@@ -71,7 +71,7 @@ class KumaWidgetProvider : AppWidgetProvider() {
                         val dt = LocalDateTime.parse(t.timestamp, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
                         val amt = t.amount.toLongOrNull() ?: 0L
 
-                        // LOGIC SPLIT WALLET BUAT WIDGET
+                        // Compute and allocate split transaction values across different wallets
                         if (txObj.splits.isNotEmpty()) {
                             txObj.splits.forEach { split ->
                                 val current = walletBalances[split.splitWallet] ?: 0L
@@ -82,7 +82,7 @@ class KumaWidgetProvider : AppWidgetProvider() {
                             walletBalances[t.wallet] = current + (if(t.isIncome) amt else -amt)
                         }
 
-                        // Hitung Income & Expense bulan INI aja (pake total parent amount)
+                        // Calculate the total income and expenses exclusively for the current month
                         if (dt.monthValue == currentMonth && dt.year == currentYear) {
                             if (t.isIncome) income += amt else expenses += amt
                         }
@@ -92,7 +92,7 @@ class KumaWidgetProvider : AppWidgetProvider() {
                 val totalBal = walletBalances.values.sum()
                 val top3Wallets = walletBalances.entries.toList().take(3)
 
-                // Update UI Widget
+                // Update widget UI components with the newly calculated data
                 views.setTextViewText(R.id.tv_widget_balance, "$curSym ${NumberFormat.getInstance(locale).format(totalBal)}")
                 views.setTextViewText(R.id.tv_widget_income, "↑ Income $curSym ${NumberFormat.getInstance(locale).format(income)}")
                 views.setTextViewText(R.id.tv_widget_expense, "↓ Expenses $curSym ${NumberFormat.getInstance(locale).format(expenses)}")
@@ -110,7 +110,7 @@ class KumaWidgetProvider : AppWidgetProvider() {
                     views.setTextViewText(R.id.tv_w3_bal, "$curSym ${NumberFormat.getInstance(locale).format(abs(top3Wallets[2].value))}")
                 }
 
-                // Push update ke Homescreen
+                // Apply the updated views to the homescreen widget
                 appWidgetManager.updateAppWidget(widgetId, views)
             } catch (e: Exception) { e.printStackTrace() }
         }

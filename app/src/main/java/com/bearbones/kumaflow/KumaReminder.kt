@@ -28,10 +28,10 @@ import android.annotation.SuppressLint
 
 class KumaReminder : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        // MAKSIMALIN WAKE-UP
+        // Maximize device wake-up mechanism to ensure alarm execution
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         val wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "KumaFlow:AlarmWakeLock")
-        wakeLock.acquire(10000L) // Paksa bangun selama 10 detik
+        wakeLock.acquire(10000L) // Force device wake lock for 10 seconds to complete the operation
 
         try {
             Toast.makeText(context, "Alarm Triggered!", Toast.LENGTH_SHORT).show()
@@ -147,7 +147,7 @@ fun scheduleKumaReminders(context: Context, profile: UserProfile) {
 
     val intent = Intent(context, KumaReminder::class.java)
 
-    // Bersihin alarm lama biar nggak numpuk
+    // Clear previously set alarms to prevent duplication and overlap
     for (i in 0..4) {
         val pendingIntent = PendingIntent.getBroadcast(context, i, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         alarmManager.cancel(pendingIntent)
@@ -177,7 +177,7 @@ fun scheduleKumaReminders(context: Context, profile: UserProfile) {
             val pendingIntent = PendingIntent.getBroadcast(context, index, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
             try {
-                // The Nuclear Option: Pakai setAlarmClock biar tembus penjagaan sistem ColorOS
+                // Use setAlarmClock to bypass aggressive battery optimization (e.g., ColorOS)
                 val alarmClockInfo = AlarmManager.AlarmClockInfo(calendar.timeInMillis, pendingIntent)
                 alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
             } catch (e: Exception) {

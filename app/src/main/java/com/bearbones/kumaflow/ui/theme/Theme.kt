@@ -16,17 +16,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-// 1. Skema Warna Dark Mode
+// 1. Dark Mode Color Scheme
 private val DarkColorScheme = darkColorScheme(
     primary = BearRust,
     background = PitchBlack,
-    surface = CardDark, // Buat background kotak-kotak menu
-    onPrimary = Color.White, // Teks di atas warna utama
-    onBackground = CreamyText, // Teks biasa di Dark Mode
+    surface = CardDark, // Background color for card and menu elements
+    onPrimary = Color.White, // Text color overlaid on primary color
+    onBackground = CreamyText, // Primary text color for Dark Mode
     onSurface = CreamyText
 )
 
-// 2. Skema Warna Light Mode
+// 2. Light Mode Color Scheme
 private val LightColorScheme = lightColorScheme(
     primary = DeepGrizzly,
     background = CreamyBelly,
@@ -36,25 +36,25 @@ private val LightColorScheme = lightColorScheme(
     onSurface = DeepGrizzly
 )
 
-// Pastiin lo punya tipe data buat state Settings lo, misal:
+// Ensure a data type exists to represent the application settings state, for example:
 enum class ThemePreference { LIGHT, DARK, SYSTEM }
 
 @Composable
 fun KumaFlowTheme(
-    // 1. Ganti parameter biar nerima state langsung dari DataStore/ViewModel
+    // 1. Modify the parameter to directly accept state from DataStore or ViewModel
     themePref: ThemePreference = ThemePreference.SYSTEM,
-    // WAJIB FALSE: Biar warna HP Oppo Reno 7 temen-temen lo gak nimpa warna desain asli lo!
+    // MUST BE FALSE: Prevents device-specific dynamic colors (e.g., heavily customized OS themes) from overriding the intended design language.
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    // 2. Evaluasi mutlak ada di sini:
+    // 2. Strict evaluation for theme mode:
     val isDark = when (themePref) {
         ThemePreference.LIGHT -> false
         ThemePreference.DARK -> true
         ThemePreference.SYSTEM -> isSystemInDarkTheme()
     }
 
-    // 3. Terapin isDark ke pembagian color scheme
+    // 3. Apply the resolved isDark boolean to the color scheme assignment
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
@@ -64,13 +64,13 @@ fun KumaFlowTheme(
         else -> LightColorScheme
     }
 
-    // Ini buat ngubah warna status bar (jam & baterai di atas layar) biar nyatu sama background
+    // Synchronize the status bar color (clock and battery icons) with the active background theme
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
             window.statusBarColor = colorScheme.background.toArgb()
-            // 4. Update juga toggle light status bar-nya pake isDark
+            // 4. Toggle the status bar icon contrast based on the isDark state
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !isDark
         }
     }

@@ -43,7 +43,7 @@ fun WrappedScreen(
     onClose: () -> Unit
 ) {
     val locale = Locale.forLanguageTag("id-ID")
-    val isId = AppStr.isId // Tarik data bahasa dari main app
+    val isId = AppStr.isId // Retrieve the locale settings from the main application context
 
     val curSym = when(profile.currency) {
         "USD", "AUD", "CAD", "SGD" -> "$"
@@ -56,7 +56,7 @@ fun WrappedScreen(
 
     val googleFont = FontFamily.SansSerif
 
-    // --- KALKULASI DATA WRAPPED ---
+    // --- WRAPPED DATA CALCULATION ---
     val expenses = prevMonthTransactions.filter { !it.isIncome }
     val incomes = prevMonthTransactions.filter { it.isIncome }
 
@@ -78,7 +78,7 @@ fun WrappedScreen(
         else -> if (isId) "Si Paling Bijak \uD83E\uDD13" else "The Wise Spender \uD83E\uDD13"
     }
 
-    // --- LOGIKA IG STORY (DURASI DIPERPANJANG JADI 8 DETIK) ---
+    // --- INSTAGRAM STORY-STYLE LOGIC (DURATION EXTENDED TO 8 SECONDS) ---
     val pages = 6
     val pagerState = rememberPagerState(pageCount = { pages })
     val coroutineScope = rememberCoroutineScope()
@@ -86,15 +86,15 @@ fun WrappedScreen(
     var isPaused by remember { mutableStateOf(false) }
     val progressAnim = remember { Animatable(0f) }
 
-    // 🔥 FIX BUG NYANGKUT: Reset timer pas ganti page
+    // 🔥 BUG FIX: Reset the active timer upon page transition
     LaunchedEffect(pagerState.currentPage) {
         progressAnim.snapTo(0f)
     }
 
-    // 🔥 FIX BUG NYANGKUT: Pisahin animasi pindah layar dari efek Pause
+    // 🔥 BUG FIX: Decouple the screen transition animation from the pause effect
     LaunchedEffect(pagerState.currentPage, isPaused) {
         if (!isPaused) {
-            val remainingTime = ((1f - progressAnim.value) * 8000).toInt() // Durasi sekarang 8 detik
+            val remainingTime = ((1f - progressAnim.value) * 8000).toInt() // Current animation duration is set to 8 seconds
             if (remainingTime > 0) {
                 progressAnim.animateTo(
                     targetValue = 1f,
@@ -102,7 +102,7 @@ fun WrappedScreen(
                 )
             }
 
-            // Pas nyampe 100%, pindah layar pake coroutine luar biar kaga ke-cancel pas disentuh!
+            // Upon reaching 100% completion, trigger the page transition via an external coroutine to prevent cancellation upon touch events
             if (progressAnim.value >= 1f && pagerState.currentPage < pages - 1) {
                 coroutineScope.launch {
                     pagerState.animateScrollToPage(pagerState.currentPage + 1)

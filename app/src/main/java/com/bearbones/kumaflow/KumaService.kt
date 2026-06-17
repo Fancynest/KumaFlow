@@ -24,7 +24,7 @@ import java.util.Calendar
 class KumaService : Service() {
 
     private var serviceJob: Job? = null
-    private var lastTriggeredMinute = -1 // Biar notif gak spam berkali-kali di menit yang sama
+    private var lastTriggeredMinute = -1 // Prevent duplicate notification triggers within the same minute
 
     override fun onCreate() {
         super.onCreate()
@@ -33,7 +33,7 @@ class KumaService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Balikin START_STICKY biar kalau misal OS maksa nge-kill, dia bakal auto-restart
+        // Return START_STICKY to ensure automatic restart if the OS kills the service
         return START_STICKY
     }
 
@@ -43,7 +43,7 @@ class KumaService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        serviceJob?.cancel() // Matiin loop kalau service dimatiin
+        serviceJob?.cancel() // Terminate the background loop when the service is destroyed
     }
 
     private fun startInternalTimer() {
@@ -65,7 +65,7 @@ class KumaService : Service() {
                                 val targetHour = parts[0].toIntOrNull() ?: 0
                                 val targetMin = parts[1].toIntOrNull() ?: 0
 
-                                // Kalau jam dan menit cocok, dan belum pernah ditrigger di menit ini
+                                // Trigger reminder if the exact time matches and has not been triggered yet
                                 if (currentHour == targetHour && currentMin == targetMin && currentMin != lastTriggeredMinute) {
                                     lastTriggeredMinute = currentMin
                                     showReminderNotification(this@KumaService)
@@ -73,7 +73,7 @@ class KumaService : Service() {
                             }
                         }
 
-                        // Reset lastTriggeredMinute kalau menit udah ganti
+                        // Reset the trigger lock once the minute changes
                         if (currentMin != lastTriggeredMinute) {
                             lastTriggeredMinute = -1
                         }
@@ -82,7 +82,7 @@ class KumaService : Service() {
                     e.printStackTrace()
                 }
 
-                // Cek setiap 15 detik. Ini super ringan, gak bakal bikin boros baterai
+                // Polling every 15 seconds. Designed to be lightweight with minimal battery impact.
                 delay(15000L)
             }
         }
@@ -137,7 +137,7 @@ class KumaService : Service() {
         )
 
         val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_kuma_notif) // Ganti R.mipmap.ic_launcher kalau error
+            .setSmallIcon(R.drawable.ic_kuma_notif) // Fallback to R.mipmap.ic_launcher if the custom notification icon fails
             .setContentTitle(randomMsg.first)
             .setContentText(randomMsg.second)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -167,7 +167,7 @@ class KumaService : Service() {
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("KumaFlow Aktif")
             .setContentText("Menjaga pengingat agar tetap berjalan...")
-            .setSmallIcon(R.drawable.ic_kuma_notif) // Ganti R.mipmap.ic_launcher kalau error
+            .setSmallIcon(R.drawable.ic_kuma_notif) // Fallback to R.mipmap.ic_launcher if the custom notification icon fails
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .setOngoing(true)
             .setGroup("SERVICE_GROUP")

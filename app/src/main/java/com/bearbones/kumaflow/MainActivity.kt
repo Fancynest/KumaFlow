@@ -795,7 +795,7 @@ class MainActivity : FragmentActivity() {
 
             val sharedPrefs = remember { context.getSharedPreferences("kumaflow_prefs", android.content.Context.MODE_PRIVATE) }
 
-            // 🔥 STATE BARU BUAT NANGKEP BULAN & TAHUN 🔥
+            // 🔥 NEW STATE TO CAPTURE CURRENT MONTH & YEAR 🔥
             var wrappedTarget by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
             LaunchedEffect(userProfile?.userName) {
@@ -833,16 +833,16 @@ class MainActivity : FragmentActivity() {
                     isBearTriggered && activeThemeMode == 5 -> lightColorScheme(background = Color(0xFFFFF3E0), surface = Color(0xFFFFE0B2), primary = Color(0xFFBF360C), onPrimary = Color.White, onBackground = Color(0xFF3E2723), onSurface = Color(0xFF3E2723))
                     isBearTriggered && activeThemeMode == 6 -> darkColorScheme(background = Color(0xFF3E2723), surface = Color(0xFF4E342E), primary = Color(0xFFFFCA28), onPrimary = Color.Black, onBackground = Color(0xFFEFEBE9), onSurface = Color(0xFFEFEBE9))
 
-                    // 🔥 LOGIC BARU: DYNAMIC COLOR + AMOLED FUSION! 🔥
+                    // 🔥 NEW LOGIC: DYNAMIC COLOR + AMOLED FUSION! 🔥
                     activeThemeMode == 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-                        // Ambil dulu palet warna dari wallpaper HP lu
+                        // Extract the primary color palette from the device's wallpaper
                         val dynamicTheme = if (isDark) androidx.compose.material3.dynamicDarkColorScheme(context) else androidx.compose.material3.dynamicLightColorScheme(context)
 
-                        // Kalau mode gelap DAN amoled nyala, bajak background-nya aja biar item pekat!
+                        // Enforce a pure black background if both Dark Mode and AMOLED Mode are enabled
                         if (isDark && isAmoled) {
                             dynamicTheme.copy(
-                                background = Color(0xFF000000), // Item mati 100%
-                                surface = Color(0xFF121212) // Surface tetep ada gradasi abu dikit biar misah dari background
+                                background = Color(0xFF000000), // 100% Pure Black
+                                surface = Color(0xFF121212) // Slight gray tint on surface to maintain visual hierarchy against the pure black background
                             )
                         } else {
                             dynamicTheme
@@ -871,7 +871,7 @@ class MainActivity : FragmentActivity() {
 
                                 NewUserAnnouncementDialog()
 
-                                // 🔥 LOGIKA WRAPPED DINAMIS 🔥
+                                // 🔥 DYNAMIC WRAPPED LOGIC 🔥
                                 if (wrappedTarget != null && userProfile != null) {
                                     val targetMonth = wrappedTarget!!.first
                                     val targetYear = wrappedTarget!!.second
@@ -902,7 +902,7 @@ class MainActivity : FragmentActivity() {
                                             val pMonth = todayCal.get(java.util.Calendar.MONTH) + 1
                                             val pYear = todayCal.get(java.util.Calendar.YEAR)
 
-                                            // Cuma ngilangin banner kalau yang dibuka beneran bulan lalu
+                                            // Dismiss the banner exclusively if the navigated content belongs to the previous month
                                             if (targetMonth == pMonth && targetYear == pYear) {
                                                 sharedPrefs.edit().putString("last_viewed_wrapped", "$pMonth-$pYear").apply()
                                             }
@@ -1319,7 +1319,7 @@ fun HomeScreen(
             item { Spacer(modifier = Modifier.height(if (isSelectionMode) 180.dp else 100.dp)) }
         }
 
-        // 🔥 OVERLAY BAR AKSI MASSAL 🔥
+        // 🔥 BULK ACTION OVERLAY BAR 🔥
         androidx.compose.animation.AnimatedVisibility(
             visible = isSelectionMode,
             modifier = Modifier.align(Alignment.BottomCenter),

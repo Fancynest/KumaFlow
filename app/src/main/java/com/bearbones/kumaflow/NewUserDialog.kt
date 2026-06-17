@@ -23,7 +23,7 @@ fun NewUserAnnouncementDialog() {
     val context = LocalContext.current
     val sharedPref = context.getSharedPreferences("KumaFlowPrefs", Context.MODE_PRIVATE)
 
-    // Cek apakah ini pertama kali user buka app (default-nya true)
+    // Verify if this is the user's first time launching the application (defaults to true)
     var showDialog by remember {
         mutableStateOf(sharedPref.getBoolean("is_first_time_user", true))
     }
@@ -31,8 +31,8 @@ fun NewUserAnnouncementDialog() {
     if (showDialog) {
         AlertDialog(
             onDismissRequest = {
-                // Sengaja dikosongin biar user gak bisa tutup dialog sembarangan
-                // dengan cara klik di luar area pop-up. Mereka HARUS klik tombol "Paham".
+                // Intentionally left blank to prevent the user from accidentally dismissing the dialog
+                // by tapping outside the pop-up area. Explicit interaction with the "Got it" button is required.
             },
             title = {
                 Text(
@@ -61,8 +61,8 @@ fun NewUserAnnouncementDialog() {
             confirmButton = {
                 TextButton(
                     onClick = {
-                        // Kalau tombol diklik, ubah status "is_first_time_user" jadi false
-                        // Terus simpan ke HP, biar next time app dibuka, dialog ini gak muncul lagi
+                        // Upon button interaction, update the "is_first_time_user" status flag to false
+                        // Persist this state locally to ensure the dialog is not displayed on subsequent app launches
                         sharedPref.edit().putBoolean("is_first_time_user", false).apply()
                         showDialog = false
                     }
