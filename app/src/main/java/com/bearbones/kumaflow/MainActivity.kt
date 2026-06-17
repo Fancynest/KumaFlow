@@ -107,6 +107,8 @@ import java.util.Locale
 import kotlin.math.abs
 import androidx.compose.ui.draw.blur
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import com.bearbones.kumaflow.NewUserAnnouncementDialog
 
 // --- DATA CLASSES & OBJECTS ---
@@ -813,10 +815,19 @@ class MainActivity : FragmentActivity() {
                 LocalIsAmoled provides isAmoled
             ) {
                 val colorScheme = when {
+                    // 1. Easter Egg Pride & Bear (Prioritas paling tinggi kalau lagi bulan Juni)
                     isPrideTriggered && activeThemeMode == 3 -> lightColorScheme(background = Color(0xFFFCE4EC), surface = Color(0xFFF8BBD0), primary = Color(0xFFD81B60), onPrimary = Color.White, onBackground = Color(0xFF212121), onSurface = Color(0xFF212121))
                     isPrideTriggered && activeThemeMode == 4 -> darkColorScheme(background = Color(0xFF121212), surface = Color(0xFF263238), primary = Color(0xFFAA00FF), onPrimary = Color.White, onBackground = Color.White, onSurface = Color.White)
                     isBearTriggered && activeThemeMode == 5 -> lightColorScheme(background = Color(0xFFFFF3E0), surface = Color(0xFFFFE0B2), primary = Color(0xFFBF360C), onPrimary = Color.White, onBackground = Color(0xFF3E2723), onSurface = Color(0xFF3E2723))
                     isBearTriggered && activeThemeMode == 6 -> darkColorScheme(background = Color(0xFF3E2723), surface = Color(0xFF4E342E), primary = Color(0xFFFFCA28), onPrimary = Color.Black, onBackground = Color(0xFFEFEBE9), onSurface = Color(0xFFEFEBE9))
+
+                    // 2. 🔥 MATERIAL YOU (Dynamic Color) BUAT ANDROID 12+ 🔥
+                    activeThemeMode == 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+                        if (isDark) androidx.compose.material3.dynamicDarkColorScheme(context)
+                        else androidx.compose.material3.dynamicLightColorScheme(context)
+                    }
+
+                    // 3. Fallback buat OS Jadul atau Tema Default (Light/Dark/Amoled)
                     isDark -> if (isAmoled) darkColorScheme(background = Color(0xFF000000), surface = Color(0xFF0F0F0F), onBackground = Color(0xFFE0E0E0), onSurface = Color(0xFFE0E0E0), primary = Color(0xFFD5641C), onPrimary = Color.White) else darkColorScheme(background = Color(0xFF121212), surface = Color(0xFF1E1E1E), onBackground = Color(0xFFE0E0E0), onSurface = Color(0xFFE0E0E0), primary = Color(0xFFD5641C), onPrimary = Color.White)
                     else -> lightColorScheme(background = Color(0xFFD9D2C5), surface = Color(0xFFC7BCAC), onBackground = Color(0xFF4A2F1D), onSurface = Color(0xFF4A2F1D), primary = Color(0xFF4A2F1D), onPrimary = Color.White)
                 }
@@ -890,7 +901,7 @@ class MainActivity : FragmentActivity() {
 fun MainScreen(
     userProfileState: UserProfile?,
     dao: TransactionDao,
-    onOpenWrapped: (Int, Int) -> Unit = { _, _ -> } // 🔥 UPDATE PARAMETER
+    onOpenWrapped: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -903,15 +914,23 @@ fun MainScreen(
     LaunchedEffect(selectedItemIndex) { if (pagerState.currentPage != selectedItemIndex) pagerState.animateScrollToPage(selectedItemIndex) }
     LaunchedEffect(pagerState.currentPage, pagerState.isScrollInProgress) { if (!pagerState.isScrollInProgress) selectedItemIndex = pagerState.currentPage }
 
-    var selectedMonth by remember { mutableIntStateOf(LocalDateTime.now().monthValue) }
-    var selectedYear by remember { mutableIntStateOf(LocalDateTime.now().year) }
+    var selectedMonth by remember { mutableIntStateOf(java.time.LocalDateTime.now().monthValue) }
+    var selectedYear by remember { mutableIntStateOf(java.time.LocalDateTime.now().year) }
     var forceUpdateTrigger by remember { mutableIntStateOf(0) }
+
+    // 🔥 STATE FAB YANG UDAH DIANGKAT KE MAINSCREEN 🔥
+    val homeListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val isFabVisible by remember {
+        derivedStateOf {
+            homeListState.firstVisibleItemIndex == 0 || !homeListState.isScrollInProgress
+        }
+    }
 
     val monthlyTransactionsWithSplits by remember(transactionListWithSplits, selectedMonth, selectedYear, forceUpdateTrigger) {
         derivedStateOf {
             transactionListWithSplits.filter { t ->
                 try {
-                    val dt = LocalDateTime.parse(t.transaction.timestamp, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                    val dt = java.time.LocalDateTime.parse(t.transaction.timestamp, java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME)
                     dt.monthValue == selectedMonth && dt.year == selectedYear
                 } catch (e: Exception) { true }
             }
@@ -924,7 +943,7 @@ fun MainScreen(
             val relevantTxs = if (userProfile.useCarryOver) {
                 transactionListWithSplits.filter { t ->
                     try {
-                        val dt = LocalDateTime.parse(t.transaction.timestamp, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                        val dt = java.time.LocalDateTime.parse(t.transaction.timestamp, java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME)
                         dt.year < selectedYear || (dt.year == selectedYear && dt.monthValue <= selectedMonth)
                     } catch (e: Exception) { false }
                 }
@@ -959,7 +978,9 @@ fun MainScreen(
     Scaffold(
         containerColor = AppBg(),
         floatingActionButton = {
-            if (selectedItemIndex != 2) {
+            // 🔥 LOGIKA AUTO-HIDE NYALA DI SINI 🔥
+            val showFab = selectedItemIndex != 2 && (selectedItemIndex != 0 || isFabVisible)
+            if (showFab) {
                 FloatingActionButton(
                     onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); transactionToEdit = null; showBottomSheet = true },
                     containerColor = AppPrimary(), contentColor = Color.White, shape = CircleShape, modifier = Modifier.size(70.dp)
@@ -976,7 +997,8 @@ fun MainScreen(
                         onMonthChange = { m, y -> haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); selectedMonth = m; selectedYear = y },
                         onEdit = { t -> transactionToEdit = t; showBottomSheet = true },
                         onDelete = { t -> scope.launch { dao.deleteTransaction(t.transaction); updateKumaWidget(context) } },
-                        onOpenWrapped = onOpenWrapped
+                        onOpenWrapped = onOpenWrapped,
+                        listState = homeListState // 🔥 LEMPAR STATE NYA KE SINI 🔥
                     )
                     1 -> ReportScreen(
                         profile = userProfile, monthlyTransactions = monthlyTransactionsWithSplits.map { it.transaction }, allTransactions = transactionListWithSplits.map { it.transaction }, income = totalIncome, expenses = totalExpenses, balance = totalBalance, selectedMonth = selectedMonth, selectedYear = selectedYear,
@@ -1639,6 +1661,7 @@ fun MonthYearSelector(currentMonth: Int, currentYear: Int, onMonthChange: (Int, 
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     profile: UserProfile,
@@ -1652,33 +1675,39 @@ fun HomeScreen(
     onMonthChange: (Int, Int) -> Unit,
     onEdit: (TransactionWithSplits) -> Unit,
     onDelete: (TransactionWithSplits) -> Unit,
-    onOpenWrapped: (Int, Int) -> Unit = { _, _ -> }
+    onOpenWrapped: (Int, Int) -> Unit = { _, _ -> },
+    listState: androidx.compose.foundation.lazy.LazyListState // 🔥 PARAMETER BARU 🔥
 ) {
     val context = LocalContext.current
-    val locale = Locale.forLanguageTag("id-ID")
+    val locale = java.util.Locale.forLanguageTag("id-ID")
     val curSym = when(profile.currency) { "USD", "AUD", "CAD", "SGD" -> "$"; "EUR" -> "€"; "GBP" -> "£"; "JPY", "CNY" -> "¥"; "CHF" -> "CHF"; else -> "Rp" }
 
     val haptic = LocalHapticFeedback.current
 
-    // 🔥 PRIVACY MODE (Udah bersih kaga pake embel-embel package)
     var isPrivacyMode by rememberSaveable { mutableStateOf(false) }
-    val blurRadius by animateDpAsState(targetValue = if (isPrivacyMode) 12.dp else 0.dp, label = "blur_anim")
+    val blurRadius by androidx.compose.animation.core.animateDpAsState(targetValue = if (isPrivacyMode) 12.dp else 0.dp, label = "blur_anim")
 
     var searchQuery by remember { mutableStateOf("") }
     val filteredTx = transactionsWithSplits.filter {
         it.transaction.name.contains(searchQuery, ignoreCase = true) || it.transaction.category.contains(searchQuery, ignoreCase = true) || it.transaction.message.contains(searchQuery, ignoreCase = true)
     }
 
+    // 🔥 LOGIKA STICKY HEADERS: Kelompokkin transaksi berdasarkan tanggal
+    val groupedTx = remember(filteredTx) { filteredTx.groupBy { it.transaction.date } }
+
     val sharedPrefs = remember { context.getSharedPreferences("kumaflow_prefs", android.content.Context.MODE_PRIVATE) }
-    val cal = Calendar.getInstance()
-    cal.add(Calendar.MONTH, -1)
-    val prevMonth = cal.get(Calendar.MONTH) + 1
-    val prevYear = cal.get(Calendar.YEAR)
+    val cal = java.util.Calendar.getInstance()
+    cal.add(java.util.Calendar.MONTH, -1)
+    val prevMonth = cal.get(java.util.Calendar.MONTH) + 1
+    val prevYear = cal.get(java.util.Calendar.YEAR)
     val wrappedKey = "$prevMonth-$prevYear"
 
     var showWrappedBanner by remember { mutableStateOf(sharedPrefs.getString("last_viewed_wrapped", "") != wrappedKey) }
 
-    LazyColumn(modifier = Modifier.fillMaxSize().padding(top = 24.dp)) {
+    LazyColumn(
+        state = listState, // 🔥 PAKE PARAMETER DI SINI 🔥
+        modifier = Modifier.fillMaxSize().padding(top = 24.dp)
+    ) {
         item {
             Column(modifier = Modifier.padding(horizontal = 24.dp)) {
                 if (showWrappedBanner) {
@@ -1692,7 +1721,7 @@ fun HomeScreen(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text("KumaFlow Wrapped ✨", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    val monthName = cal.getDisplayName(Calendar.MONTH, Calendar.LONG, locale) ?: "Bulan Lalu"
+                                    val monthName = cal.getDisplayName(java.util.Calendar.MONTH, java.util.Calendar.LONG, locale) ?: "Bulan Lalu"
                                     Text("Rapor keuanganmu di bulan $monthName udah siap! Yuk intip pengeluaranmu.", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, lineHeight = 16.sp)
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
@@ -1731,7 +1760,6 @@ fun HomeScreen(
                             }
                             Spacer(modifier = Modifier.height(8.dp))
                             val balPref = if (balance < 0) "- " else ""
-                            // 🔥 Pake .blur() langsung yang rapi
                             AutoSizeText(text = "$balPref$curSym ${NumberFormat.getInstance(locale).format(abs(balance))}", modifier = Modifier.fillMaxWidth().blur(blurRadius), fontSize = 48.sp, fontWeight = FontWeight.Black, color = Color.White, minimumFallbackSize = 24.sp)
                         }
                         Spacer(modifier = Modifier.height(20.dp))
@@ -1740,7 +1768,6 @@ fun HomeScreen(
                                 val wBalPref = if (amt < 0) "- " else ""
                                 Column(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(AppBg().copy(alpha = 0.2f)).padding(horizontal = 16.dp, vertical = 10.dp)) {
                                     Text(walletName, color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                    // 🔥 Pake .blur() langsung
                                     Text("$wBalPref$curSym ${NumberFormat.getInstance(locale).format(abs(amt))}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.blur(blurRadius))
                                 }
                             }
@@ -1748,11 +1775,9 @@ fun HomeScreen(
                         Spacer(modifier = Modifier.height(20.dp))
                         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.ArrowUpward, null, tint = if (isPrideThemeActive) Color.White else AppGreen(), modifier = Modifier.size(20.dp))
-                            // 🔥 Pake .blur() langsung
                             AutoSizeText(text = "${AppStr.inc} $curSym ${NumberFormat.getInstance(locale).format(income)}", modifier = Modifier.weight(1f).padding(start = 4.dp).blur(blurRadius), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, minimumFallbackSize = 8.sp)
                             Spacer(modifier = Modifier.width(8.dp))
                             Icon(Icons.Default.ArrowDownward, null, tint = if (isPrideThemeActive) Color.White else AppRed(), modifier = Modifier.size(20.dp))
-                            // 🔥 Pake .blur() langsung
                             AutoSizeText(text = "${AppStr.exp} $curSym ${NumberFormat.getInstance(locale).format(expenses)}", modifier = Modifier.weight(1f).padding(start = 4.dp).blur(blurRadius), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, minimumFallbackSize = 8.sp)
                         }
                     }
@@ -1788,9 +1813,30 @@ fun HomeScreen(
                 }
             }
         } else {
-            items(filteredTx) {
-                Box(modifier = Modifier.padding(horizontal = 24.dp)) { TransactionItem(profile, it, isPrivacyMode, onEdit, onDelete) }
-                Spacer(modifier = Modifier.height(14.dp))
+            // 🔥 EKSEKUSI STICKY HEADERS 🔥
+            groupedTx.forEach { (date, txs) ->
+                stickyHeader {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(AppBg())
+                            .padding(horizontal = 24.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = date,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Black,
+                            color = AppPrimary()
+                        )
+                    }
+                }
+
+                items(txs) { item ->
+                    Box(modifier = Modifier.padding(horizontal = 24.dp)) {
+                        TransactionItem(profile, item, isPrivacyMode, onEdit, onDelete)
+                    }
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
             }
         }
         item { Spacer(modifier = Modifier.height(100.dp)) }
@@ -3501,19 +3547,19 @@ fun LegendItem(label: String, color: Color) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun TransactionItem(
     profile: UserProfile,
     obj: TransactionWithSplits,
-    isPrivacyMode: Boolean, // 🔥 PARAMETER BARU 🔥
+    isPrivacyMode: Boolean,
     onEdit: (TransactionWithSplits) -> Unit,
     onDelete: (TransactionWithSplits) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     val trans = obj.transaction
+    val haptic = LocalHapticFeedback.current
 
-    // 🔥 ANIMASI BLUR 🔥
     val blurRadius by androidx.compose.animation.core.animateDpAsState(targetValue = if (isPrivacyMode) 12.dp else 0.dp, label = "blur_tx_anim")
 
     val curSym = when(profile.currency) {
@@ -3563,14 +3609,81 @@ fun TransactionItem(
         )
     }
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { expanded = true },
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = if (trans.category == "Transfer") Color(0xFF1976D2) else Color(0xFFD5641C))
+    // 🔥 LOGIKA SWIPE TO DISMISS STATE 🔥
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.EndToStart -> {
+                    // Swipe kiri = Hapus
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    showDeleteDialog = true
+                    false
+                }
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    // Swipe kanan = Edit
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onEdit(obj)
+                    false
+                }
+                else -> false
+            }
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = true,
+        enableDismissFromEndToStart = true,
+        backgroundContent = {
+            val color = when (dismissState.dismissDirection) {
+                SwipeToDismissBoxValue.StartToEnd -> Color(0xFF1976D2) // Biru pas geser kanan
+                SwipeToDismissBoxValue.EndToStart -> AppRed() // Merah pas geser kiri
+                else -> Color.Transparent
+            }
+            val alignment = when (dismissState.dismissDirection) {
+                SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
+                SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
+                else -> Alignment.Center
+            }
+            val iconSwipe = when (dismissState.dismissDirection) {
+                SwipeToDismissBoxValue.StartToEnd -> Icons.Default.Edit
+                SwipeToDismissBoxValue.EndToStart -> Icons.Default.Delete
+                else -> Icons.Default.Category
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(color)
+                    .padding(horizontal = 24.dp),
+                contentAlignment = alignment
+            ) {
+                Icon(iconSwipe, contentDescription = null, tint = Color.White)
+            }
+        }
     ) {
-        Box {
+        // 🔥 ISI CONTENT CARD UTAMA 🔥
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                // Ganti clickable biasa pake combinedClickable
+                .combinedClickable(
+                    onClick = {
+                        // Klik biasa sekarang langsung ngebuka menu Edit biar cepet
+                        onEdit(obj)
+                    },
+                    onLongClick = {
+                        // 🔥 JURUS KAGEBUNSHIN (DUPLICATE) 🔥
+                        // Kloning datanya, set ID = 0 biar pas di-save ke-insert sebagai transaksi baru!
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        val duplicateTx = obj.copy(transaction = trans.copy(id = 0, name = "${trans.name} (Copy)"))
+                        onEdit(duplicateTx)
+                    }
+                ),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = if (trans.category == "Transfer") Color(0xFF1976D2) else Color(0xFFD5641C))
+        ) {
             Row(
                 modifier = Modifier.padding(18.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -3581,44 +3694,20 @@ fun TransactionItem(
                         .background(Color.White.copy(alpha = 0.3f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        icon,
-                        null,
-                        tint = Color.White,
-                        modifier = Modifier.size(24.dp)
-                    )
+                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
                 }
 
                 Spacer(modifier = Modifier.width(16.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        trans.name,
-                        color = Color.White,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 16.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Text(trans.name, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
 
                     if (trans.message.isNotEmpty()) {
-                        Text(
-                            trans.message,
-                            color = Color.White.copy(alpha = 0.9f),
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Text(trans.message, color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp, bottom = 2.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
 
-                    Text(
-                        "${trans.date} • ${trans.wallet} • ${trans.category}",
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    // Kita hapus teks trans.date di sini karena udah diwakilin sama Sticky Header di atas layar!
+                    Text("${trans.wallet} • ${trans.category}", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
 
                 val formatted = try {
@@ -3627,48 +3716,12 @@ fun TransactionItem(
                     trans.amount
                 }
 
-                // 🔥 EFEK BLUR DI NOMINAL TRANSAKSI 🔥
                 AutoSizeText(
                     text = "${if (trans.isIncome) "+ " else "- "} $curSym $formatted",
                     color = if (trans.isIncome) Color.White else AppText(),
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .widthIn(max = 120.dp)
-                        .padding(start = 8.dp)
-                        .blur(blurRadius), // MANTRA AJAIBNYA DI SINI
+                    modifier = Modifier.widthIn(max = 120.dp).padding(start = 8.dp).blur(blurRadius),
                     minimumFallbackSize = 10.sp
-                )
-            }
-
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
-            ) {
-                DropdownMenuItem(
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Edit, null, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(AppStr.edit)
-                        }
-                    },
-                    onClick = {
-                        onEdit(obj)
-                        expanded = false
-                    }
-                )
-                DropdownMenuItem(
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Delete, null, tint = AppRed(), modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(AppStr.delete, color = AppRed())
-                        }
-                    },
-                    onClick = {
-                        showDeleteDialog = true
-                        expanded = false
-                    }
                 )
             }
         }
