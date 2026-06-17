@@ -105,6 +105,8 @@ import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
+import androidx.compose.ui.draw.blur
+import androidx.compose.animation.core.animateDpAsState
 import com.bearbones.kumaflow.NewUserAnnouncementDialog
 
 // --- DATA CLASSES & OBJECTS ---
@@ -1077,6 +1079,9 @@ fun TransactionBottomSheet(
 
     val focusRequester = remember { FocusRequester() }
 
+    // 🔥 SMART NUMPAD: Daftar karakter matematika yang diizinkan
+    val allowedMathChars = setOf('0','1','2','3','4','5','6','7','8','9','+','-','*','/','(',')',' ','.')
+
     LaunchedEffect(Unit) {
         if (baseTx == null) {
             focusRequester.requestFocus()
@@ -1104,7 +1109,6 @@ fun TransactionBottomSheet(
                 color = AppText()
             )
         }
-
 
         Row(
             modifier = Modifier
@@ -1288,22 +1292,27 @@ fun TransactionBottomSheet(
         }
 
         if (txMode == 2) {
+            // 🔥 SMART NUMPAD TRANSFER MODE 🔥
             OutlinedTextField(
                 value = initialSplits[0].amount,
                 onValueChange = {
-                    if (it.all { c -> c.isDigit() }) {
+                    if (it.all { c -> c in allowedMathChars }) {
                         initialSplits[0] = initialSplits[0].copy(amount = it)
                     }
                 },
                 label = { Text(AppStr.jumlahPindah) },
-                visualTransformation = ThousandSeparatorTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                placeholder = { Text("Cth: 15000+2000") },
+                // Matikan ThousandSeparator kalau ada simbol matematika biar kaga meledak
+                visualTransformation = if (initialSplits[0].amount.any { c -> c in "+-*/()" }) androidx.compose.ui.text.input.VisualTransformation.None else ThousandSeparatorTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp)
             )
             Spacer(modifier = Modifier.height(16.dp))
+
+            val calcTransfer = evaluateMathExpression(initialSplits[0].amount) ?: 0L
             Text(
-                "${AppStr.totalTransfer}: $curSym ${NumberFormat.getInstance(Locale.getDefault()).format(initialSplits[0].amount.toLongOrNull() ?: 0L)}",
+                "${AppStr.totalTransfer}: $curSym ${NumberFormat.getInstance(Locale.getDefault()).format(calcTransfer)}",
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Right,
                 fontWeight = FontWeight.Black,
@@ -1368,15 +1377,17 @@ fun TransactionBottomSheet(
                         }
                     }
 
+                    // 🔥 SMART NUMPAD SPLIT/NORMAL MODE 🔥
                     OutlinedTextField(
                         value = splitItem.amount,
                         onValueChange = {
-                            if (it.all { c -> c.isDigit() }) {
+                            if (it.all { c -> c in allowedMathChars }) {
                                 initialSplits[index] = splitItem.copy(amount = it)
                             }
                         },
-                        visualTransformation = ThousandSeparatorTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        placeholder = { Text("15000+2000") },
+                        visualTransformation = if (splitItem.amount.any { c -> c in "+-*/()" }) androidx.compose.ui.text.input.VisualTransformation.None else ThousandSeparatorTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                         modifier = Modifier.weight(1.5f),
                         shape = RoundedCornerShape(12.dp)
                     )
@@ -1409,7 +1420,8 @@ fun TransactionBottomSheet(
                 Text(AppStr.addOtherWallet, color = AppPrimary(), fontWeight = FontWeight.Bold)
             }
 
-            val totalAmount = initialSplits.sumOf { it.amount.toLongOrNull() ?: 0L }
+            // Hitung total pakai otak kalkulator secara live
+            val totalAmount = initialSplits.sumOf { evaluateMathExpression(it.amount) ?: 0L }
 
             Spacer(modifier = Modifier.height(16.dp))
             Text(
@@ -1424,23 +1436,27 @@ fun TransactionBottomSheet(
 
         Spacer(modifier = Modifier.height(30.dp))
 
+        // 🔥 LOGIKA SAVE YG UDAH DI-EVALUATE MATEMATIKANYA 🔥
+        val evaluatedSplits = initialSplits.map { it.copy(amount = (evaluateMathExpression(it.amount) ?: 0L).toString()) }
+        val totalAmtFinal = if (txMode == 2) (evaluatedSplits[0].amount.toLongOrNull() ?: 0L) else evaluatedSplits.sumOf { it.amount.toLongOrNull() ?: 0L }
+        val isAmountValid = totalAmtFinal > 0L
+
         Button(
             onClick = {
                 val now = LocalDateTime.now()
-                val totalAmt = if (txMode == 2) (initialSplits[0].amount.toLongOrNull() ?: 0L) else initialSplits.sumOf { it.amount.toLongOrNull() ?: 0L }
                 val timeStr = baseTx?.timestamp ?: now.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
                 val dateStr = baseTx?.date ?: now.format(DateTimeFormatter.ofPattern(if(AppStr.isId) "dd MMM yyyy" else "MMM dd, yyyy", Locale.getDefault()))
 
                 if (txMode == 2) {
                     val title = name.ifEmpty { AppStr.defMutasiTitle }
-                    val txOut = KumaTransaction(id = 0, name = title, date = dateStr, amount = totalAmt.toString(), isIncome = false, category = "Transfer", wallet = transferFromWallet, timestamp = timeStr, message = message)
-                    val txIn = KumaTransaction(id = 0, name = title, date = dateStr, amount = totalAmt.toString(), isIncome = true, category = "Transfer", wallet = transferToWallet, timestamp = timeStr, message = message)
+                    val txOut = KumaTransaction(id = 0, name = title, date = dateStr, amount = totalAmtFinal.toString(), isIncome = false, category = "Transfer", wallet = transferFromWallet, timestamp = timeStr, message = message)
+                    val txIn = KumaTransaction(id = 0, name = title, date = dateStr, amount = totalAmtFinal.toString(), isIncome = true, category = "Transfer", wallet = transferToWallet, timestamp = timeStr, message = message)
 
                     onSave(listOf(Pair(txOut, emptyList()), Pair(txIn, emptyList())))
                 } else {
-                    val parentWalletStr = if(initialSplits.size > 1) "${AppStr.multiWallet} (${initialSplits.size})" else initialSplits[0].wallet
-                    val newTx = KumaTransaction(id = baseTx?.id ?: 0, name = name, date = dateStr, amount = totalAmt.toString(), isIncome = (txMode == 1), category = selectedCategory, wallet = parentWalletStr, timestamp = timeStr, message = message)
-                    val dbSplits = initialSplits.filter { it.amount.isNotBlank() && (it.amount.toLongOrNull() ?: 0L) > 0 }.map { TransactionSplit(transactionId = 0, splitWallet = it.wallet, splitAmount = it.amount.toLongOrNull() ?: 0L) }
+                    val parentWalletStr = if(evaluatedSplits.size > 1) "${AppStr.multiWallet} (${evaluatedSplits.size})" else evaluatedSplits[0].wallet
+                    val newTx = KumaTransaction(id = baseTx?.id ?: 0, name = name, date = dateStr, amount = totalAmtFinal.toString(), isIncome = (txMode == 1), category = selectedCategory, wallet = parentWalletStr, timestamp = timeStr, message = message)
+                    val dbSplits = evaluatedSplits.filter { it.amount.isNotBlank() && (it.amount.toLongOrNull() ?: 0L) > 0 }.map { TransactionSplit(transactionId = 0, splitWallet = it.wallet, splitAmount = it.amount.toLongOrNull() ?: 0L) }
 
                     onSave(listOf(Pair(newTx, dbSplits)))
                 }
@@ -1451,7 +1467,7 @@ fun TransactionBottomSheet(
                 .height(55.dp),
             colors = ButtonDefaults.buttonColors(containerColor = AppPrimary()),
             shape = RoundedCornerShape(16.dp),
-            enabled = (if(txMode == 2) (initialSplits[0].amount.toLongOrNull() ?: 0L) > 0 else (initialSplits.sumOf { it.amount.toLongOrNull() ?: 0L }) > 0) && (txMode == 2 || name.isNotEmpty())
+            enabled = isAmountValid && (txMode == 2 || name.isNotEmpty())
         ) {
             Text(AppStr.saveTx, color = Color.White, fontWeight = FontWeight.ExtraBold)
         }
@@ -1636,11 +1652,17 @@ fun HomeScreen(
     onMonthChange: (Int, Int) -> Unit,
     onEdit: (TransactionWithSplits) -> Unit,
     onDelete: (TransactionWithSplits) -> Unit,
-    onOpenWrapped: (Int, Int) -> Unit = { _, _ -> } // 🔥 UPDATE PARAMETER
+    onOpenWrapped: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val locale = Locale.forLanguageTag("id-ID")
     val curSym = when(profile.currency) { "USD", "AUD", "CAD", "SGD" -> "$"; "EUR" -> "€"; "GBP" -> "£"; "JPY", "CNY" -> "¥"; "CHF" -> "CHF"; else -> "Rp" }
+
+    val haptic = LocalHapticFeedback.current
+
+    // 🔥 PRIVACY MODE (Udah bersih kaga pake embel-embel package)
+    var isPrivacyMode by rememberSaveable { mutableStateOf(false) }
+    val blurRadius by animateDpAsState(targetValue = if (isPrivacyMode) 12.dp else 0.dp, label = "blur_anim")
 
     var searchQuery by remember { mutableStateOf("") }
     val filteredTx = transactionsWithSplits.filter {
@@ -1662,7 +1684,7 @@ fun HomeScreen(
                 if (showWrappedBanner) {
                     val bannerGradient = androidx.compose.ui.graphics.Brush.linearGradient(colors = listOf(Color(0xFFE40303), Color(0xFF732982)))
                     Card(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp).clickable { onOpenWrapped(prevMonth, prevYear) }, // 🔥 TRIGGER KLIK DI SINI
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp).clickable { onOpenWrapped(prevMonth, prevYear) },
                         shape = RoundedCornerShape(24.dp), elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                     ) {
                         Box(modifier = Modifier.fillMaxWidth().background(bannerGradient).padding(20.dp)) {
@@ -1694,10 +1716,23 @@ fun HomeScreen(
                 ) {
                     Column(modifier = Modifier.padding(vertical = 32.dp).fillMaxSize(), verticalArrangement = Arrangement.Center) {
                         Column(modifier = Modifier.padding(horizontal = 32.dp)) {
-                            Text(AppStr.curBal, color = if (isPrideThemeActive) Color.White else AppText(), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(AppStr.curBal, color = if (isPrideThemeActive) Color.White else AppText(), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(
+                                    imageVector = if (isPrivacyMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = "Toggle Privacy",
+                                    tint = if (isPrideThemeActive) Color.White else AppText(),
+                                    modifier = Modifier.clip(CircleShape).clickable {
+                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        isPrivacyMode = !isPrivacyMode
+                                    }.padding(4.dp)
+                                )
+                            }
                             Spacer(modifier = Modifier.height(8.dp))
                             val balPref = if (balance < 0) "- " else ""
-                            AutoSizeText(text = "$balPref$curSym ${NumberFormat.getInstance(locale).format(abs(balance))}", modifier = Modifier.fillMaxWidth(), fontSize = 48.sp, fontWeight = FontWeight.Black, color = Color.White, minimumFallbackSize = 24.sp)
+                            // 🔥 Pake .blur() langsung yang rapi
+                            AutoSizeText(text = "$balPref$curSym ${NumberFormat.getInstance(locale).format(abs(balance))}", modifier = Modifier.fillMaxWidth().blur(blurRadius), fontSize = 48.sp, fontWeight = FontWeight.Black, color = Color.White, minimumFallbackSize = 24.sp)
                         }
                         Spacer(modifier = Modifier.height(20.dp))
                         LazyRow(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 32.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1705,17 +1740,20 @@ fun HomeScreen(
                                 val wBalPref = if (amt < 0) "- " else ""
                                 Column(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(AppBg().copy(alpha = 0.2f)).padding(horizontal = 16.dp, vertical = 10.dp)) {
                                     Text(walletName, color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                    Text("$wBalPref$curSym ${NumberFormat.getInstance(locale).format(abs(amt))}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+                                    // 🔥 Pake .blur() langsung
+                                    Text("$wBalPref$curSym ${NumberFormat.getInstance(locale).format(abs(amt))}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.blur(blurRadius))
                                 }
                             }
                         }
                         Spacer(modifier = Modifier.height(20.dp))
                         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.ArrowUpward, null, tint = if (isPrideThemeActive) Color.White else AppGreen(), modifier = Modifier.size(20.dp))
-                            AutoSizeText(text = "${AppStr.inc} $curSym ${NumberFormat.getInstance(locale).format(income)}", modifier = Modifier.weight(1f).padding(start = 4.dp), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, minimumFallbackSize = 8.sp)
+                            // 🔥 Pake .blur() langsung
+                            AutoSizeText(text = "${AppStr.inc} $curSym ${NumberFormat.getInstance(locale).format(income)}", modifier = Modifier.weight(1f).padding(start = 4.dp).blur(blurRadius), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, minimumFallbackSize = 8.sp)
                             Spacer(modifier = Modifier.width(8.dp))
                             Icon(Icons.Default.ArrowDownward, null, tint = if (isPrideThemeActive) Color.White else AppRed(), modifier = Modifier.size(20.dp))
-                            AutoSizeText(text = "${AppStr.exp} $curSym ${NumberFormat.getInstance(locale).format(expenses)}", modifier = Modifier.weight(1f).padding(start = 4.dp), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, minimumFallbackSize = 8.sp)
+                            // 🔥 Pake .blur() langsung
+                            AutoSizeText(text = "${AppStr.exp} $curSym ${NumberFormat.getInstance(locale).format(expenses)}", modifier = Modifier.weight(1f).padding(start = 4.dp).blur(blurRadius), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, minimumFallbackSize = 8.sp)
                         }
                     }
                 }
@@ -1742,32 +1780,16 @@ fun HomeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    // --- KODINGAN AJAIB LOTTIE ---
                     val composition by com.airbnb.lottie.compose.rememberLottieComposition(com.airbnb.lottie.compose.LottieCompositionSpec.RawRes(R.raw.beruang_kosong))
-                    val progress by com.airbnb.lottie.compose.animateLottieCompositionAsState(
-                        composition = composition,
-                        iterations = com.airbnb.lottie.compose.LottieConstants.IterateForever // Biar animasinya looping terus kaga berhenti
-                    )
-
-                    com.airbnb.lottie.compose.LottieAnimation(
-                        composition = composition,
-                        progress = { progress },
-                        modifier = Modifier.size(150.dp) // Ukuran beruangnya, bisa lu gede-kecilin sendiri
-                    )
-                    // -----------------------------
-
+                    val progress by com.airbnb.lottie.compose.animateLottieCompositionAsState(composition = composition, iterations = com.airbnb.lottie.compose.LottieConstants.IterateForever)
+                    com.airbnb.lottie.compose.LottieAnimation(composition = composition, progress = { progress }, modifier = Modifier.size(150.dp))
                     Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        AppStr.noTx,
-                        textAlign = TextAlign.Center,
-                        color = AppText().copy(alpha = 0.5f),
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text(AppStr.noTx, textAlign = TextAlign.Center, color = AppText().copy(alpha = 0.5f), fontWeight = FontWeight.Bold)
                 }
             }
         } else {
             items(filteredTx) {
-                Box(modifier = Modifier.padding(horizontal = 24.dp)) { TransactionItem(profile, it, onEdit, onDelete) }
+                Box(modifier = Modifier.padding(horizontal = 24.dp)) { TransactionItem(profile, it, isPrivacyMode, onEdit, onDelete) }
                 Spacer(modifier = Modifier.height(14.dp))
             }
         }
@@ -3483,12 +3505,16 @@ fun LegendItem(label: String, color: Color) {
 fun TransactionItem(
     profile: UserProfile,
     obj: TransactionWithSplits,
+    isPrivacyMode: Boolean, // 🔥 PARAMETER BARU 🔥
     onEdit: (TransactionWithSplits) -> Unit,
     onDelete: (TransactionWithSplits) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     val trans = obj.transaction
+
+    // 🔥 ANIMASI BLUR 🔥
+    val blurRadius by androidx.compose.animation.core.animateDpAsState(targetValue = if (isPrivacyMode) 12.dp else 0.dp, label = "blur_tx_anim")
 
     val curSym = when(profile.currency) {
         "USD", "AUD", "CAD", "SGD" -> "$"
@@ -3575,17 +3601,6 @@ fun TransactionItem(
                         overflow = TextOverflow.Ellipsis
                     )
 
-                    // --- DEBUG AREA ---
-                    /*
-                     Text(
-                         text = "DEBUG TS: ${trans.timestamp}",
-                         fontSize = 8.sp,
-                         color = Color.Yellow,
-                         fontWeight = FontWeight.Bold
-                     )
-                     */
-                    // ------------------
-
                     if (trans.message.isNotEmpty()) {
                         Text(
                             trans.message,
@@ -3612,13 +3627,15 @@ fun TransactionItem(
                     trans.amount
                 }
 
+                // 🔥 EFEK BLUR DI NOMINAL TRANSAKSI 🔥
                 AutoSizeText(
                     text = "${if (trans.isIncome) "+ " else "- "} $curSym $formatted",
                     color = if (trans.isIncome) Color.White else AppText(),
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
                         .widthIn(max = 120.dp)
-                        .padding(start = 8.dp),
+                        .padding(start = 8.dp)
+                        .blur(blurRadius), // MANTRA AJAIBNYA DI SINI
                     minimumFallbackSize = 10.sp
                 )
             }
@@ -3718,4 +3735,76 @@ fun checkAndApplyPrideEasterEgg(context: android.content.Context, userName: Stri
         setIcon(normalIcon) // Paksa balik ke normal kalau udah lewat Juni
     }
 
+}
+
+// Taruh di luar class, bebas di paling bawah file
+fun evaluateMathExpression(input: String): Long? {
+    return try {
+        // Ilangin semua spasi biar kaga error
+        val expression = input.replace("\\s".toRegex(), "")
+        if (expression.isEmpty()) return null
+
+        // Logika parser ringan buat ngitung +, -, *, /
+        object : Any() {
+            var pos = -1
+            var ch = 0
+
+            fun nextChar() {
+                ch = if (++pos < expression.length) expression[pos].code else -1
+            }
+
+            fun eat(charToEat: Int): Boolean {
+                while (ch == ' '.code) nextChar()
+                if (ch == charToEat) {
+                    nextChar()
+                    return true
+                }
+                return false
+            }
+
+            fun parse(): Double {
+                nextChar()
+                val x = parseExpression()
+                if (pos < expression.length) throw RuntimeException("Unexpected: " + ch.toChar())
+                return x
+            }
+
+            fun parseExpression(): Double {
+                var x = parseTerm()
+                while (true) {
+                    if (eat('+'.code)) x += parseTerm() // Tambah
+                    else if (eat('-'.code)) x -= parseTerm() // Kurang
+                    else return x
+                }
+            }
+
+            fun parseTerm(): Double {
+                var x = parseFactor()
+                while (true) {
+                    if (eat('*'.code)) x *= parseFactor() // Kali
+                    else if (eat('/'.code)) x /= parseFactor() // Bagi
+                    else return x
+                }
+            }
+
+            fun parseFactor(): Double {
+                if (eat('+'.code)) return parseFactor()
+                if (eat('-'.code)) return -parseFactor()
+                var x: Double
+                val startPos = pos
+                if (eat('('.code)) {
+                    x = parseExpression()
+                    eat(')'.code)
+                } else if (ch >= '0'.code && ch <= '9'.code || ch == '.'.code) {
+                    while (ch >= '0'.code && ch <= '9'.code || ch == '.'.code) nextChar()
+                    x = expression.substring(startPos, pos).toDouble()
+                } else {
+                    throw RuntimeException("Unexpected: " + ch.toChar())
+                }
+                return x
+            }
+        }.parse().toLong()
+    } catch (e: Exception) {
+        null // Kalau user ngetik ngawur (misal "15000+"), balikin null aja kaga usah error
+    }
 }
