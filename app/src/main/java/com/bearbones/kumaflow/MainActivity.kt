@@ -3675,7 +3675,6 @@ fun TransactionItem(
                     },
                     onLongClick = {
                         // 🔥 JURUS KAGEBUNSHIN (DUPLICATE) 🔥
-                        // Kloning datanya, set ID = 0 biar pas di-save ke-insert sebagai transaksi baru!
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         val duplicateTx = obj.copy(transaction = trans.copy(id = 0, name = "${trans.name} (Copy)"))
                         onEdit(duplicateTx)
@@ -3706,7 +3705,6 @@ fun TransactionItem(
                         Text(trans.message, color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp, bottom = 2.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
 
-                    // Kita hapus teks trans.date di sini karena udah diwakilin sama Sticky Header di atas layar!
                     Text("${trans.wallet} • ${trans.category}", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
 
@@ -3719,6 +3717,7 @@ fun TransactionItem(
                 AutoSizeText(
                     text = "${if (trans.isIncome) "+ " else "- "} $curSym $formatted",
                     color = if (trans.isIncome) Color.White else AppText(),
+                    fontSize = 16.sp, // 🔥 INI OBATNYA UDAH GUA PASANG 🔥
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.widthIn(max = 120.dp).padding(start = 8.dp).blur(blurRadius),
                     minimumFallbackSize = 10.sp
