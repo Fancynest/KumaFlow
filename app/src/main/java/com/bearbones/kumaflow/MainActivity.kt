@@ -110,8 +110,6 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
-import androidx.compose.foundation.border
-import com.bearbones.kumaflow.NewUserAnnouncementDialog
 
 // --- DATA CLASSES & OBJECTS ---
 
@@ -144,6 +142,7 @@ object AppStr {
     val date get() = if(isId) "Tanggal" else "Date"
     val tar get() = "Target Global"
     val catBudget get() = if(isId) "Budget Kategori" else "Category Budget"
+
     const val VERSION = "v4.6.5"
     val dat get() = "Data"
     val expPdf get() = if(isId) "Ekspor ke PDF" else "Export to PDF"
@@ -235,6 +234,17 @@ object AppStr {
     val backupReminderMsg get() = if(isId) "Data kamu udah makin banyak nih. Mending backup dulu filenya biar nggak hilang kalo HP kamu kenapa-kenapa. \uD83D\uDC3B" else "You have a lot of data now. Better backup your file so you don't lose it if something happens to your phone. \uD83D\uDC3B"
     val backupNow get() = if(isId) "Backup Sekarang" else "Backup Now"
     val later get() = if(isId) "Nanti Aja" else "Later"
+    val optDb get() = if(isId) "Optimasi Database" else "Optimize Database"
+    val optSuccess get() = if(isId) "Storage berhasil dioptimasi! 🧹" else "Storage optimized! 🧹"
+    val optFail get() = if(isId) "Gagal optimasi: " else "Optimization failed: "
+    val cancelBulk get() = if(isId) "Batal Massal" else "Cancel Selection"
+    val changeCat get() = if(isId) "Ubah Kategori" else "Change Category"
+    val selected get() = if(isId) "Dipilih" else "Selected"
+    val bulkDel get() = if(isId) "Hapus Massal" else "Bulk Delete"
+    val chooseNewCat get() = if(isId) "Pilih Kategori Baru" else "Choose New Category"
+
+    fun txDeleted(count: Int) = if(isId) "$count transaksi dihapus" else "$count transactions deleted"
+    fun txChangedTo(count: Int, cat: String) = if(isId) "$count transaksi diubah ke $cat" else "$count transactions changed to $cat"
     val versionInfo get() = if(isId) "Versi: $VERSION\nBuild: Beta\nTipe: Standalone Local" else "Version: $VERSION\nBuild: Edit Category Icon\nType: Standalone Local"
 }
 
@@ -930,8 +940,12 @@ fun MainScreen(
     var selectedYear by remember { mutableIntStateOf(java.time.LocalDateTime.now().year) }
     var forceUpdateTrigger by remember { mutableIntStateOf(0) }
 
-    // 🔥 STATE FAB YANG UDAH DIANGKAT KE MAINSCREEN 🔥
     val homeListState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    // 🔥 STATE SELECTION HOISTING 🔥
+    var selectedTxs by remember { mutableStateOf(setOf<Int>()) }
+    val isSelectionMode = selectedTxs.isNotEmpty()
+
     val isFabVisible by remember {
         derivedStateOf {
             homeListState.firstVisibleItemIndex == 0 || !homeListState.isScrollInProgress
@@ -990,8 +1004,7 @@ fun MainScreen(
     Scaffold(
         containerColor = AppBg(),
         floatingActionButton = {
-            // 🔥 LOGIKA AUTO-HIDE NYALA DI SINI 🔥
-            val showFab = selectedItemIndex != 2 && (selectedItemIndex != 0 || isFabVisible)
+            val showFab = selectedItemIndex != 2 && (selectedItemIndex != 0 || isFabVisible) && !isSelectionMode
             if (showFab) {
                 FloatingActionButton(
                     onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); transactionToEdit = null; showBottomSheet = true },
@@ -1005,12 +1018,44 @@ fun MainScreen(
             HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                 when (page) {
                     0 -> HomeScreen(
-                        profile = userProfile, transactionsWithSplits = monthlyTransactionsWithSplits, balance = totalBalance, walletBalances = walletBalances, income = totalIncome, expenses = totalExpenses, selectedMonth = selectedMonth, selectedYear = selectedYear,
-                        onMonthChange = { m, y -> haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); selectedMonth = m; selectedYear = y },
-                        onEdit = { t -> transactionToEdit = t; showBottomSheet = true },
-                        onDelete = { t -> scope.launch { dao.deleteTransaction(t.transaction); updateKumaWidget(context) } },
+                        profile = userProfile,
+                        transactionsWithSplits = monthlyTransactionsWithSplits,
+                        balance = totalBalance,
+                        walletBalances = walletBalances,
+                        income = totalIncome,
+                        expenses = totalExpenses,
+                        selectedMonth = selectedMonth,
+                        selectedYear = selectedYear,
+                        onMonthChange = { m: Int, y: Int -> haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); selectedMonth = m; selectedYear = y },
+                        onEdit = { t: TransactionWithSplits -> transactionToEdit = t; showBottomSheet = true },
+                        onDelete = { t: TransactionWithSplits -> scope.launch { dao.deleteTransaction(t.transaction); updateKumaWidget(context) } },
                         onOpenWrapped = onOpenWrapped,
-                        listState = homeListState // 🔥 LEMPAR STATE NYA KE SINI 🔥
+                        listState = homeListState,
+                        selectedTxs = selectedTxs,
+                        onToggleSelect = { id: Int ->
+                            val newSet = selectedTxs.toMutableSet()
+                            if (newSet.contains(id)) newSet.remove(id) else newSet.add(id)
+                            selectedTxs = newSet
+                        },
+                        clearSelection = { selectedTxs = emptySet() },
+                        onBulkDelete = { listToDelete: List<TransactionWithSplits> ->
+                            scope.launch {
+                                listToDelete.forEach { dao.deleteTransaction(it.transaction) }
+                                updateKumaWidget(context)
+                                Toast.makeText(context, AppStr.txDeleted(listToDelete.size), Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onBulkUpdateCategory = { listToUpdate: List<TransactionWithSplits>, newCat: String ->
+                            scope.launch {
+                                listToUpdate.forEach { txObj ->
+                                    val updatedTx = txObj.transaction.copy(category = newCat)
+                                    dao.updateFullTransaction(updatedTx, txObj.splits)
+                                }
+                                forceUpdateTrigger++
+                                updateKumaWidget(context)
+                                Toast.makeText(context, AppStr.txChangedTo(listToUpdate.size, newCat), Toast.LENGTH_SHORT).show()
+                            }
+                        }
                     )
                     1 -> ReportScreen(
                         profile = userProfile, monthlyTransactions = monthlyTransactionsWithSplits.map { it.transaction }, allTransactions = transactionListWithSplits.map { it.transaction }, income = totalIncome, expenses = totalExpenses, balance = totalBalance, selectedMonth = selectedMonth, selectedYear = selectedYear,
@@ -1061,6 +1106,306 @@ fun MainScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun HomeScreen(
+    profile: UserProfile,
+    transactionsWithSplits: List<TransactionWithSplits>,
+    balance: Long,
+    walletBalances: Map<String, Long>,
+    income: Long,
+    expenses: Long,
+    selectedMonth: Int,
+    selectedYear: Int,
+    onMonthChange: (Int, Int) -> Unit,
+    onEdit: (TransactionWithSplits) -> Unit,
+    onDelete: (TransactionWithSplits) -> Unit,
+    onOpenWrapped: (Int, Int) -> Unit = { _, _ -> },
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    selectedTxs: Set<Int>,
+    onToggleSelect: (Int) -> Unit,
+    clearSelection: () -> Unit,
+    onBulkDelete: (List<TransactionWithSplits>) -> Unit,
+    onBulkUpdateCategory: (List<TransactionWithSplits>, String) -> Unit
+) {
+    val context = LocalContext.current
+    val locale = java.util.Locale.forLanguageTag("id-ID")
+    val curSym = when(profile.currency) { "USD", "AUD", "CAD", "SGD" -> "$"; "EUR" -> "€"; "GBP" -> "£"; "JPY", "CNY" -> "¥"; "CHF" -> "CHF"; else -> "Rp" }
+
+    val haptic = LocalHapticFeedback.current
+
+    var isPrivacyMode by rememberSaveable { mutableStateOf(false) }
+    val blurRadius by androidx.compose.animation.core.animateDpAsState(targetValue = if (isPrivacyMode) 12.dp else 0.dp, label = "blur_anim")
+
+    var searchQuery by remember { mutableStateOf("") }
+    val filteredTx = transactionsWithSplits.filter {
+        it.transaction.name.contains(searchQuery, ignoreCase = true) || it.transaction.category.contains(searchQuery, ignoreCase = true) || it.transaction.message.contains(searchQuery, ignoreCase = true)
+    }
+
+    val groupedTx = remember(filteredTx) { filteredTx.groupBy { it.transaction.date } }
+
+    val sharedPrefs = remember { context.getSharedPreferences("kumaflow_prefs", android.content.Context.MODE_PRIVATE) }
+    val cal = java.util.Calendar.getInstance()
+    cal.add(java.util.Calendar.MONTH, -1)
+    val prevMonth = cal.get(java.util.Calendar.MONTH) + 1
+    val prevYear = cal.get(java.util.Calendar.YEAR)
+    val wrappedKey = "$prevMonth-$prevYear"
+
+    var showWrappedBanner by remember { mutableStateOf(sharedPrefs.getString("last_viewed_wrapped", "") != wrappedKey) }
+
+    val isSelectionMode = selectedTxs.isNotEmpty()
+    var showBulkCatDialog by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().padding(top = 24.dp)
+        ) {
+            item {
+                Column(modifier = Modifier.padding(horizontal = 24.dp)) {
+                    if (showWrappedBanner) {
+                        val bannerGradient = androidx.compose.ui.graphics.Brush.linearGradient(colors = listOf(Color(0xFFE40303), Color(0xFF732982)))
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp).clickable { onOpenWrapped(prevMonth, prevYear) },
+                            shape = RoundedCornerShape(24.dp), elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().background(bannerGradient).padding(20.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("KumaFlow Wrapped ✨", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        val monthName = cal.getDisplayName(java.util.Calendar.MONTH, java.util.Calendar.LONG, locale) ?: "Bulan Lalu"
+                                        Text("Rapor keuanganmu di bulan $monthName udah siap! Yuk intip pengeluaranmu.", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, lineHeight = 16.sp)
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Icon(Icons.Default.ArrowForwardIos, contentDescription = "Buka Wrapped", tint = Color.White, modifier = Modifier.size(20.dp))
+                                }
+                            }
+                        }
+                    }
+
+                    Text(if (AppStr.isId) "Halo, ${profile.userName}!" else "Hello, ${profile.userName}!", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
+                    Spacer(modifier = Modifier.height(16.dp))
+                    MonthYearSelector(selectedMonth, selectedYear, onMonthChange)
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    val isPrideThemeActive = profile.themeMode == 3 || profile.themeMode == 4
+                    val prideGradient = androidx.compose.ui.graphics.Brush.linearGradient(colors = listOf(Color(0xFFE40303), Color(0xFFFF8C00), Color(0xFFFFED00), Color(0xFF008026), Color(0xFF24408E), Color(0xFF732982)))
+                    val defaultSurfaceColor = AppSurface()
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 250.dp)
+                            .border(1.dp, AppText().copy(alpha = 0.15f), RoundedCornerShape(32.dp))
+                            .clip(RoundedCornerShape(32.dp))
+                            .background(if (isPrideThemeActive) prideGradient else androidx.compose.ui.graphics.SolidColor(defaultSurfaceColor))
+                    ) {
+                        Column(modifier = Modifier.padding(vertical = 32.dp).fillMaxSize(), verticalArrangement = Arrangement.Center) {
+                            Column(modifier = Modifier.padding(horizontal = 32.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(AppStr.curBal, color = if (isPrideThemeActive) Color.White else AppText(), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Icon(
+                                        imageVector = if (isPrivacyMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = "Toggle Privacy",
+                                        tint = if (isPrideThemeActive) Color.White else AppText(),
+                                        modifier = Modifier.clip(CircleShape).clickable {
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            isPrivacyMode = !isPrivacyMode
+                                        }.padding(4.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                val balPref = if (balance < 0) "- " else ""
+                                AutoSizeText(text = "$balPref$curSym ${NumberFormat.getInstance(locale).format(abs(balance))}", modifier = Modifier.fillMaxWidth().blur(blurRadius), fontSize = 48.sp, fontWeight = FontWeight.Black, color = Color.White, minimumFallbackSize = 24.sp)
+                            }
+                            Spacer(modifier = Modifier.height(20.dp))
+                            LazyRow(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 32.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                items(walletBalances.toList()) { (walletName, amt) ->
+                                    val wBalPref = if (amt < 0) "- " else ""
+                                    Column(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(AppBg().copy(alpha = 0.2f)).padding(horizontal = 16.dp, vertical = 10.dp)) {
+                                        Text(walletName, color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Text("$wBalPref$curSym ${NumberFormat.getInstance(locale).format(abs(amt))}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.blur(blurRadius))
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(20.dp))
+                            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.ArrowUpward, null, tint = if (isPrideThemeActive) Color.White else AppGreen(), modifier = Modifier.size(20.dp))
+                                AutoSizeText(text = "${AppStr.inc} $curSym ${NumberFormat.getInstance(locale).format(income)}", modifier = Modifier.weight(1f).padding(start = 4.dp).blur(blurRadius), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, minimumFallbackSize = 8.sp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(Icons.Default.ArrowDownward, null, tint = if (isPrideThemeActive) Color.White else AppRed(), modifier = Modifier.size(20.dp))
+                                AutoSizeText(text = "${AppStr.exp} $curSym ${NumberFormat.getInstance(locale).format(expenses)}", modifier = Modifier.weight(1f).padding(start = 4.dp).blur(blurRadius), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, minimumFallbackSize = 8.sp)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    OutlinedTextField(
+                        value = searchQuery, onValueChange = { searchQuery = it }, label = { Text(AppStr.searchTx) },
+                        leadingIcon = { Icon(Icons.Default.Search, null, tint = AppText().copy(alpha = 0.5f)) },
+                        trailingIcon = { if (searchQuery.isNotEmpty()) { IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Close, null, tint = AppText()) } } },
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), shape = RoundedCornerShape(16.dp), singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = AppPrimary(),
+                            unfocusedBorderColor = AppText().copy(alpha = 0.25f)
+                        )
+                    )
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text(AppStr.recTx, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = AppText())
+                        if (isSelectionMode) {
+                            TextButton(onClick = { clearSelection() }) {
+                                Text(AppStr.cancelBulk, color = AppRed(), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+
+            if (filteredTx.isEmpty()) {
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().height(250.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        val composition by com.airbnb.lottie.compose.rememberLottieComposition(com.airbnb.lottie.compose.LottieCompositionSpec.RawRes(R.raw.beruang_kosong))
+                        val progress by com.airbnb.lottie.compose.animateLottieCompositionAsState(composition = composition, iterations = com.airbnb.lottie.compose.LottieConstants.IterateForever)
+                        com.airbnb.lottie.compose.LottieAnimation(composition = composition, progress = { progress }, modifier = Modifier.size(150.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(AppStr.noTx, textAlign = TextAlign.Center, color = AppText().copy(alpha = 0.5f), fontWeight = FontWeight.Bold)
+                    }
+                }
+            } else {
+                groupedTx.forEach { (date, txs) ->
+                    stickyHeader {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(AppBg())
+                                .padding(horizontal = 24.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = date,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Black,
+                                color = AppPrimary()
+                            )
+                        }
+                    }
+
+                    items(txs) { item ->
+                        val isSelected = selectedTxs.contains(item.transaction.id)
+                        Box(modifier = Modifier.padding(horizontal = 24.dp)) {
+                            TransactionItem(
+                                profile = profile,
+                                obj = item,
+                                isPrivacyMode = isPrivacyMode,
+                                isSelected = isSelected,
+                                isSelectionMode = isSelectionMode,
+                                onToggleSelect = { onToggleSelect(item.transaction.id) },
+                                onEdit = onEdit,
+                                onDelete = onDelete
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(14.dp))
+                    }
+                }
+            }
+            item { Spacer(modifier = Modifier.height(if (isSelectionMode) 180.dp else 100.dp)) }
+        }
+
+        // 🔥 OVERLAY BAR AKSI MASSAL 🔥
+        androidx.compose.animation.AnimatedVisibility(
+            visible = isSelectionMode,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = androidx.compose.animation.slideInVertically(initialOffsetY = { it }),
+            exit = androidx.compose.animation.slideOutVertically(targetOffsetY = { it })
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
+                    .border(1.dp, AppText().copy(alpha = 0.2f), RoundedCornerShape(24.dp))
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(AppSurfaceVariant())
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.clickable {
+                            showBulkCatDialog = true
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                    ) {
+                        Icon(Icons.Default.Category, contentDescription = null, tint = AppPrimary())
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(AppStr.changeCat, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = AppText())
+                    }
+
+                    Text("${selectedTxs.size} ${AppStr.selected}", fontWeight = FontWeight.Black, fontSize = 14.sp, color = AppText())
+
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            val txsToDelete = transactionsWithSplits.filter { selectedTxs.contains(it.transaction.id) }
+                            onBulkDelete(txsToDelete)
+                            clearSelection()
+                        }
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null, tint = AppRed())
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(AppStr.bulkDel, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = AppRed())
+                    }
+                }
+            }
+        }
+
+        if (showBulkCatDialog) {
+            val allCats = (profile.expenseCats.split(",") + profile.incomeCats.split(",")).filter { it.isNotBlank() }.distinct()
+            AlertDialog(
+                onDismissRequest = { showBulkCatDialog = false },
+                title = { Text(AppStr.chooseNewCat, fontWeight = FontWeight.Bold) },
+                text = {
+                    LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                        items(allCats) { catName ->
+                            Text(
+                                text = catName,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val txsToUpdate = transactionsWithSplits.filter { selectedTxs.contains(it.transaction.id) }
+                                        onBulkUpdateCategory(txsToUpdate, catName)
+                                        clearSelection()
+                                        showBulkCatDialog = false
+                                    }
+                                    .padding(vertical = 12.dp),
+                                color = AppText(),
+                                fontWeight = FontWeight.Bold
+                            )
+                            HorizontalDivider(color = AppText().copy(alpha = 0.1f))
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showBulkCatDialog = false }) { Text(AppStr.close, color = AppRed()) }
+                },
+                containerColor = AppSurface()
+            )
+        }
+    }
+}
+
 data class SplitItemUi(var id: String, var wallet: String, var amount: String)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1072,10 +1417,37 @@ fun TransactionBottomSheet(
     onSave: (List<Pair<KumaTransaction, List<TransactionSplit>>>) -> Unit,
     onUpdateProfile: (UserProfile) -> Unit
 ) {
+    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val baseTx = transactionToEdit?.transaction
 
     var txMode by remember(baseTx) { mutableIntStateOf(if (baseTx != null && baseTx.isIncome) 1 else 0) }
+
+    val calendar = remember { java.util.Calendar.getInstance() }
+    var txDateStr by remember(baseTx) {
+        mutableStateOf(baseTx?.date ?: java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern(if(AppStr.isId) "dd MMM yyyy" else "MMM dd, yyyy", java.util.Locale.getDefault())))
+    }
+    var txTimestamp by remember(baseTx) {
+        mutableStateOf(baseTx?.timestamp ?: java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+    }
+
+    val datePickerDialog = remember {
+        android.app.DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                val cal = java.util.Calendar.getInstance()
+                cal.set(year, month, dayOfMonth)
+                val locale = java.util.Locale.getDefault()
+                txDateStr = java.text.SimpleDateFormat(if(AppStr.isId) "dd MMM yyyy" else "MMM dd, yyyy", locale).format(cal.time)
+
+                val now = java.time.LocalDateTime.now()
+                txTimestamp = java.time.LocalDateTime.of(year, month + 1, dayOfMonth, now.hour, now.minute).format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+            },
+            calendar.get(java.util.Calendar.YEAR),
+            calendar.get(java.util.Calendar.MONTH),
+            calendar.get(java.util.Calendar.DAY_OF_MONTH)
+        )
+    }
 
     val expenseCategories = remember(profile.expenseCats) { profile.expenseCats.split(",").filter { it.isNotBlank() } }
     val incomeCategories = remember(profile.incomeCats) { profile.incomeCats.split(",").filter { it.isNotBlank() } }
@@ -1113,7 +1485,6 @@ fun TransactionBottomSheet(
 
     val focusRequester = remember { FocusRequester() }
 
-    // 🔥 SMART NUMPAD: Daftar karakter matematika yang diizinkan
     val allowedMathChars = setOf('0','1','2','3','4','5','6','7','8','9','+','-','*','/','(',')',' ','.')
 
     LaunchedEffect(Unit) {
@@ -1143,6 +1514,8 @@ fun TransactionBottomSheet(
                 color = AppText()
             )
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         Row(
             modifier = Modifier
@@ -1189,6 +1562,37 @@ fun TransactionBottomSheet(
         }
 
         Spacer(modifier = Modifier.height(20.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(16.dp))
+                .clickable {
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    datePickerDialog.show()
+                }
+        ) {
+            OutlinedTextField(
+                value = txDateStr,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text(AppStr.date) },
+                trailingIcon = {
+                    Icon(Icons.Default.CalendarToday, contentDescription = null, tint = AppPrimary())
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = false,
+                colors = OutlinedTextFieldDefaults.colors(
+                    disabledTextColor = AppText(),
+                    disabledBorderColor = AppSurfaceVariant(),
+                    disabledLabelColor = AppText().copy(alpha = 0.7f),
+                    disabledTrailingIconColor = AppPrimary()
+                ),
+                shape = RoundedCornerShape(16.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         if (txMode == 2) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1326,7 +1730,6 @@ fun TransactionBottomSheet(
         }
 
         if (txMode == 2) {
-            // 🔥 SMART NUMPAD TRANSFER MODE 🔥
             OutlinedTextField(
                 value = initialSplits[0].amount,
                 onValueChange = {
@@ -1336,7 +1739,6 @@ fun TransactionBottomSheet(
                 },
                 label = { Text(AppStr.jumlahPindah) },
                 placeholder = { Text("Cth: 15000+2000") },
-                // Matikan ThousandSeparator kalau ada simbol matematika biar kaga meledak
                 visualTransformation = if (initialSplits[0].amount.any { c -> c in "+-*/()" }) androidx.compose.ui.text.input.VisualTransformation.None else ThousandSeparatorTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 modifier = Modifier.fillMaxWidth(),
@@ -1346,7 +1748,7 @@ fun TransactionBottomSheet(
 
             val calcTransfer = evaluateMathExpression(initialSplits[0].amount) ?: 0L
             Text(
-                "${AppStr.totalTransfer}: $curSym ${NumberFormat.getInstance(Locale.getDefault()).format(calcTransfer)}",
+                "${AppStr.totalTransfer}: $curSym ${NumberFormat.getInstance(java.util.Locale.getDefault()).format(calcTransfer)}",
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Right,
                 fontWeight = FontWeight.Black,
@@ -1411,7 +1813,6 @@ fun TransactionBottomSheet(
                         }
                     }
 
-                    // 🔥 SMART NUMPAD SPLIT/NORMAL MODE 🔥
                     OutlinedTextField(
                         value = splitItem.amount,
                         onValueChange = {
@@ -1454,12 +1855,11 @@ fun TransactionBottomSheet(
                 Text(AppStr.addOtherWallet, color = AppPrimary(), fontWeight = FontWeight.Bold)
             }
 
-            // Hitung total pakai otak kalkulator secara live
             val totalAmount = initialSplits.sumOf { evaluateMathExpression(it.amount) ?: 0L }
 
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                "${AppStr.total}: $curSym ${NumberFormat.getInstance(Locale.getDefault()).format(totalAmount)}",
+                "${AppStr.total}: $curSym ${NumberFormat.getInstance(java.util.Locale.getDefault()).format(totalAmount)}",
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Right,
                 fontWeight = FontWeight.Black,
@@ -1470,16 +1870,14 @@ fun TransactionBottomSheet(
 
         Spacer(modifier = Modifier.height(30.dp))
 
-        // 🔥 LOGIKA SAVE YG UDAH DI-EVALUATE MATEMATIKANYA 🔥
         val evaluatedSplits = initialSplits.map { it.copy(amount = (evaluateMathExpression(it.amount) ?: 0L).toString()) }
         val totalAmtFinal = if (txMode == 2) (evaluatedSplits[0].amount.toLongOrNull() ?: 0L) else evaluatedSplits.sumOf { it.amount.toLongOrNull() ?: 0L }
         val isAmountValid = totalAmtFinal > 0L
 
         Button(
             onClick = {
-                val now = LocalDateTime.now()
-                val timeStr = baseTx?.timestamp ?: now.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                val dateStr = baseTx?.date ?: now.format(DateTimeFormatter.ofPattern(if(AppStr.isId) "dd MMM yyyy" else "MMM dd, yyyy", Locale.getDefault()))
+                val timeStr = txTimestamp
+                val dateStr = txDateStr
 
                 if (txMode == 2) {
                     val title = name.ifEmpty { AppStr.defMutasiTitle }
@@ -1673,198 +2071,6 @@ fun MonthYearSelector(currentMonth: Int, currentYear: Int, onMonthChange: (Int, 
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun HomeScreen(
-    profile: UserProfile,
-    transactionsWithSplits: List<TransactionWithSplits>,
-    balance: Long,
-    walletBalances: Map<String, Long>,
-    income: Long,
-    expenses: Long,
-    selectedMonth: Int,
-    selectedYear: Int,
-    onMonthChange: (Int, Int) -> Unit,
-    onEdit: (TransactionWithSplits) -> Unit,
-    onDelete: (TransactionWithSplits) -> Unit,
-    onOpenWrapped: (Int, Int) -> Unit = { _, _ -> },
-    listState: androidx.compose.foundation.lazy.LazyListState // 🔥 PARAMETER BARU 🔥
-) {
-    val context = LocalContext.current
-    val locale = java.util.Locale.forLanguageTag("id-ID")
-    val curSym = when(profile.currency) { "USD", "AUD", "CAD", "SGD" -> "$"; "EUR" -> "€"; "GBP" -> "£"; "JPY", "CNY" -> "¥"; "CHF" -> "CHF"; else -> "Rp" }
-
-    val haptic = LocalHapticFeedback.current
-
-    var isPrivacyMode by rememberSaveable { mutableStateOf(false) }
-    val blurRadius by androidx.compose.animation.core.animateDpAsState(targetValue = if (isPrivacyMode) 12.dp else 0.dp, label = "blur_anim")
-
-    var searchQuery by remember { mutableStateOf("") }
-    val filteredTx = transactionsWithSplits.filter {
-        it.transaction.name.contains(searchQuery, ignoreCase = true) || it.transaction.category.contains(searchQuery, ignoreCase = true) || it.transaction.message.contains(searchQuery, ignoreCase = true)
-    }
-
-    // 🔥 LOGIKA STICKY HEADERS: Kelompokkin transaksi berdasarkan tanggal
-    val groupedTx = remember(filteredTx) { filteredTx.groupBy { it.transaction.date } }
-
-    val sharedPrefs = remember { context.getSharedPreferences("kumaflow_prefs", android.content.Context.MODE_PRIVATE) }
-    val cal = java.util.Calendar.getInstance()
-    cal.add(java.util.Calendar.MONTH, -1)
-    val prevMonth = cal.get(java.util.Calendar.MONTH) + 1
-    val prevYear = cal.get(java.util.Calendar.YEAR)
-    val wrappedKey = "$prevMonth-$prevYear"
-
-    var showWrappedBanner by remember { mutableStateOf(sharedPrefs.getString("last_viewed_wrapped", "") != wrappedKey) }
-
-    LazyColumn(
-        state = listState, // 🔥 PAKE PARAMETER DI SINI 🔥
-        modifier = Modifier.fillMaxSize().padding(top = 24.dp)
-    ) {
-        item {
-            Column(modifier = Modifier.padding(horizontal = 24.dp)) {
-                if (showWrappedBanner) {
-                    val bannerGradient = androidx.compose.ui.graphics.Brush.linearGradient(colors = listOf(Color(0xFFE40303), Color(0xFF732982)))
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp).clickable { onOpenWrapped(prevMonth, prevYear) },
-                        shape = RoundedCornerShape(24.dp), elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                    ) {
-                        Box(modifier = Modifier.fillMaxWidth().background(bannerGradient).padding(20.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text("KumaFlow Wrapped ✨", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    val monthName = cal.getDisplayName(java.util.Calendar.MONTH, java.util.Calendar.LONG, locale) ?: "Bulan Lalu"
-                                    Text("Rapor keuanganmu di bulan $monthName udah siap! Yuk intip pengeluaranmu.", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, lineHeight = 16.sp)
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Icon(Icons.Default.ArrowForwardIos, contentDescription = "Buka Wrapped", tint = Color.White, modifier = Modifier.size(20.dp))
-                            }
-                        }
-                    }
-                }
-
-                Text(if (AppStr.isId) "Halo, ${profile.userName}!" else "Hello, ${profile.userName}!", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
-                Spacer(modifier = Modifier.height(16.dp))
-                MonthYearSelector(selectedMonth, selectedYear, onMonthChange)
-                Spacer(modifier = Modifier.height(24.dp))
-
-                val isPrideThemeActive = profile.themeMode == 3 || profile.themeMode == 4
-                val prideGradient = androidx.compose.ui.graphics.Brush.linearGradient(colors = listOf(Color(0xFFE40303), Color(0xFFFF8C00), Color(0xFFFFED00), Color(0xFF008026), Color(0xFF24408E), Color(0xFF732982)))
-                val defaultSurfaceColor = AppSurface()
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 250.dp)
-                        // 🔥 BORDER BALANCE BOX 🔥
-                        .border(1.dp, AppText().copy(alpha = 0.15f), RoundedCornerShape(32.dp))
-                        .clip(RoundedCornerShape(32.dp))
-                        .background(if (isPrideThemeActive) prideGradient else androidx.compose.ui.graphics.SolidColor(defaultSurfaceColor))
-                ) {
-                    // Isi konten balance (Column) biarin kaga usah diubah
-                    Column(modifier = Modifier.padding(vertical = 32.dp).fillMaxSize(), verticalArrangement = Arrangement.Center) {
-                        Column(modifier = Modifier.padding(horizontal = 32.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(AppStr.curBal, color = if (isPrideThemeActive) Color.White else AppText(), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Icon(
-                                    imageVector = if (isPrivacyMode) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = "Toggle Privacy",
-                                    tint = if (isPrideThemeActive) Color.White else AppText(),
-                                    modifier = Modifier.clip(CircleShape).clickable {
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        isPrivacyMode = !isPrivacyMode
-                                    }.padding(4.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            val balPref = if (balance < 0) "- " else ""
-                            AutoSizeText(text = "$balPref$curSym ${NumberFormat.getInstance(locale).format(abs(balance))}", modifier = Modifier.fillMaxWidth().blur(blurRadius), fontSize = 48.sp, fontWeight = FontWeight.Black, color = Color.White, minimumFallbackSize = 24.sp)
-                        }
-                        Spacer(modifier = Modifier.height(20.dp))
-                        LazyRow(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 32.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            items(walletBalances.toList()) { (walletName, amt) ->
-                                val wBalPref = if (amt < 0) "- " else ""
-                                Column(modifier = Modifier.clip(RoundedCornerShape(16.dp)).background(AppBg().copy(alpha = 0.2f)).padding(horizontal = 16.dp, vertical = 10.dp)) {
-                                    Text(walletName, color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                    Text("$wBalPref$curSym ${NumberFormat.getInstance(locale).format(abs(amt))}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.blur(blurRadius))
-                                }
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(20.dp))
-                        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.ArrowUpward, null, tint = if (isPrideThemeActive) Color.White else AppGreen(), modifier = Modifier.size(20.dp))
-                            AutoSizeText(text = "${AppStr.inc} $curSym ${NumberFormat.getInstance(locale).format(income)}", modifier = Modifier.weight(1f).padding(start = 4.dp).blur(blurRadius), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, minimumFallbackSize = 8.sp)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(Icons.Default.ArrowDownward, null, tint = if (isPrideThemeActive) Color.White else AppRed(), modifier = Modifier.size(20.dp))
-                            AutoSizeText(text = "${AppStr.exp} $curSym ${NumberFormat.getInstance(locale).format(expenses)}", modifier = Modifier.weight(1f).padding(start = 4.dp).blur(blurRadius), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, minimumFallbackSize = 8.sp)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(32.dp))
-
-                OutlinedTextField(
-                    value = searchQuery, onValueChange = { searchQuery = it }, label = { Text(AppStr.searchTx) },
-                    leadingIcon = { Icon(Icons.Default.Search, null, tint = AppText().copy(alpha = 0.5f)) },
-                    trailingIcon = { if (searchQuery.isNotEmpty()) { IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Close, null, tint = AppText()) } } },
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), shape = RoundedCornerShape(16.dp), singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AppPrimary(),
-                        // 🔥 BORDER SEARCH BAR BIAR KAGA NYARU 🔥
-                        unfocusedBorderColor = AppText().copy(alpha = 0.25f)
-                    )
-                )
-
-                Text(AppStr.recTx, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = AppText())
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-        }
-
-        if (filteredTx.isEmpty()) {
-            item {
-                Column(
-                    modifier = Modifier.fillMaxWidth().height(250.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    val composition by com.airbnb.lottie.compose.rememberLottieComposition(com.airbnb.lottie.compose.LottieCompositionSpec.RawRes(R.raw.beruang_kosong))
-                    val progress by com.airbnb.lottie.compose.animateLottieCompositionAsState(composition = composition, iterations = com.airbnb.lottie.compose.LottieConstants.IterateForever)
-                    com.airbnb.lottie.compose.LottieAnimation(composition = composition, progress = { progress }, modifier = Modifier.size(150.dp))
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(AppStr.noTx, textAlign = TextAlign.Center, color = AppText().copy(alpha = 0.5f), fontWeight = FontWeight.Bold)
-                }
-            }
-        } else {
-            // 🔥 EKSEKUSI STICKY HEADERS 🔥
-            groupedTx.forEach { (date, txs) ->
-                stickyHeader {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(AppBg())
-                            .padding(horizontal = 24.dp, vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = date,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Black,
-                            color = AppPrimary()
-                        )
-                    }
-                }
-
-                items(txs) { item ->
-                    Box(modifier = Modifier.padding(horizontal = 24.dp)) {
-                        TransactionItem(profile, item, isPrivacyMode, onEdit, onDelete)
-                    }
-                    Spacer(modifier = Modifier.height(14.dp))
-                }
-            }
-        }
-        item { Spacer(modifier = Modifier.height(100.dp)) }
-    }
-}
 
 @Composable
 fun ReportScreen(
@@ -1917,7 +2123,6 @@ fun ReportScreen(
         val prideGradient = Brush.linearGradient(colors = listOf(Color(0xFFE40303), Color(0xFFFF8C00), Color(0xFFFFED00), Color(0xFF008026), Color(0xFF24408E), Color(0xFF732982)))
         val defaultSurfaceColor = AppSurface()
 
-        // 🔥 BORDER KEBAL 1: Di Box Summary Kiri Atas
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1957,7 +2162,6 @@ fun ReportScreen(
         Text(AppStr.spendBreak, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = AppText())
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 🔥 BORDER KEBAL 2: Di Card Rincian Pengeluaran
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1994,7 +2198,6 @@ fun ReportScreen(
                             val progress = if (target > 0) (amt.toFloat() / target.toFloat()).coerceIn(0f, 1f) else 0f
                             val isOverLimit = target > 0 && amt > target
 
-                            // 🔥 BORDER KEBAL 3: Di item kategori dalam rincian
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -2028,7 +2231,6 @@ fun ReportScreen(
         Text(AppStr.trends, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = AppText())
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 🔥 BORDER KEBAL 4: Di Card Tren Bulanan
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2347,7 +2549,6 @@ fun SettingsScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    // 🔥 BORDER CARD NOTIFIKASI 🔥
                     .border(1.dp, AppText().copy(alpha = 0.15f), RoundedCornerShape(28.dp)),
                 shape = RoundedCornerShape(28.dp),
                 colors = CardDefaults.cardColors(containerColor = AppSurface())
@@ -2514,7 +2715,8 @@ fun SettingsScreen(
                         AppStr.expCsv to Icons.Default.Description,
                         AppStr.expDrive to Icons.Default.AddToDrive,
                         AppStr.backApp to Icons.Default.CloudUpload,
-                        AppStr.rest to Icons.Default.History
+                        AppStr.rest to Icons.Default.History,
+                        AppStr.optDb to Icons.Default.CleaningServices
                     )
                 ) { label ->
                     val plainMonthlyTxs = monthlyTransactionsWithSplits.map { it.transaction }
@@ -2524,6 +2726,22 @@ fun SettingsScreen(
                         AppStr.expDrive -> exportToDrive(context, plainMonthlyTxs, currentProfile, selectedMonth, selectedYear)
                         AppStr.backApp -> backupAppToJSON(context, currentProfile, allTransactionsWithSplits)
                         AppStr.rest -> { mainActivity?.openSafeFilePicker() }
+                        AppStr.optDb -> {
+                            scope.launch(Dispatchers.IO) {
+                                try {
+                                    val db = KumaDatabase.getDatabase(context)
+                                    db.openHelper.writableDatabase.execSQL("VACUUM")
+                                    withContext(Dispatchers.Main) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        Toast.makeText(context, AppStr.optSuccess, Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(context, "${AppStr.optFail} ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -3159,7 +3377,7 @@ fun SettingsScreen(
         )
         Spacer(modifier = Modifier.height(100.dp))
     }
-} // Ini kurung penutup fungsi SettingsScreen ya, awas kehapus wkwk
+}
 
 // --- 6. SHARED COMPONENTS (AutoSizeText, PDF, CSV, Item) ---
 
@@ -3273,7 +3491,7 @@ fun generatePDF(context: Context, data: List<KumaTransaction>, profile: UserProf
         val amountColor = if (item.isIncome) android.graphics.Color.parseColor("#1B5E20") else android.graphics.Color.parseColor("#B71C1C")
 
         paint.color = android.graphics.Color.BLACK
-        page.canvas.drawText(item.date.take(10), 40f, yPos, paint)
+        page.canvas.drawText(item.date.take(12), 40f, yPos, paint)
         page.canvas.drawText(item.category.take(10), 120f, yPos, paint)
         page.canvas.drawText(item.wallet.take(10), 200f, yPos, paint)
         page.canvas.drawText(item.name.take(25), 280f, yPos, paint)
@@ -3442,7 +3660,6 @@ fun SettingsGroupCard(
     Card(
         modifier = modifier
             .heightIn(min = 230.dp)
-            // 🔥 BORDER KEBAL NYA DI SINI 🔥
             .border(
                 width = 1.dp,
                 color = AppText().copy(alpha = 0.15f),
@@ -3506,7 +3723,6 @@ fun CustomBottomNav(
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 20.dp)
             .height(85.dp)
-            // 🔥 BORDER BOTTOM NAV 🔥
             .border(1.dp, AppText().copy(alpha = 0.15f), RoundedCornerShape(24.dp))
             .clip(RoundedCornerShape(24.dp))
             .background(AppSurface())
@@ -3543,7 +3759,7 @@ fun NavItem(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .clickable { onClick() }
-            .widthIn(max = 80.dp) // Biar kaga nabrak menu sebelahnya
+            .widthIn(max = 80.dp)
     ) {
         Icon(
             icon,
@@ -3619,6 +3835,9 @@ fun TransactionItem(
     profile: UserProfile,
     obj: TransactionWithSplits,
     isPrivacyMode: Boolean,
+    isSelected: Boolean = false,
+    isSelectionMode: Boolean = false,
+    onToggleSelect: () -> Unit = {},
     onEdit: (TransactionWithSplits) -> Unit,
     onDelete: (TransactionWithSplits) -> Unit
 ) {
@@ -3675,18 +3894,16 @@ fun TransactionItem(
         )
     }
 
-    // 🔥 LOGIKA SWIPE TO DISMISS STATE 🔥
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
+            if (isSelectionMode) return@rememberSwipeToDismissBoxState false
             when (value) {
                 SwipeToDismissBoxValue.EndToStart -> {
-                    // Swipe kiri = Hapus
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     showDeleteDialog = true
                     false
                 }
                 SwipeToDismissBoxValue.StartToEnd -> {
-                    // Swipe kanan = Edit
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onEdit(obj)
                     false
@@ -3698,12 +3915,12 @@ fun TransactionItem(
 
     SwipeToDismissBox(
         state = dismissState,
-        enableDismissFromStartToEnd = true,
-        enableDismissFromEndToStart = true,
+        enableDismissFromStartToEnd = !isSelectionMode,
+        enableDismissFromEndToStart = !isSelectionMode,
         backgroundContent = {
             val color = when (dismissState.dismissDirection) {
-                SwipeToDismissBoxValue.StartToEnd -> Color(0xFF1976D2) // Biru pas geser kanan
-                SwipeToDismissBoxValue.EndToStart -> AppRed() // Merah pas geser kiri
+                SwipeToDismissBoxValue.StartToEnd -> Color(0xFF1976D2)
+                SwipeToDismissBoxValue.EndToStart -> AppRed()
                 else -> Color.Transparent
             }
             val alignment = when (dismissState.dismissDirection) {
@@ -3729,40 +3946,64 @@ fun TransactionItem(
             }
         }
     ) {
-        // 🔥 ISI CONTENT CARD UTAMA 🔥
+        val baseCardColor = if (trans.category == "Transfer") Color(0xFF1976D2) else Color(0xFFD5641C)
+        val finalCardColor = if (isSelected) AppPrimary().copy(alpha = 0.5f) else baseCardColor
+
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                // Ganti clickable biasa pake combinedClickable
+                .border(
+                    width = if (isSelected) 2.dp else 0.dp,
+                    color = if (isSelected) AppPrimary() else Color.Transparent,
+                    shape = RoundedCornerShape(20.dp)
+                )
                 .combinedClickable(
                     onClick = {
-                        // Klik biasa sekarang langsung ngebuka menu Edit biar cepet
-                        onEdit(obj)
+                        if (isSelectionMode) {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onToggleSelect()
+                        } else {
+                            onEdit(obj)
+                        }
                     },
                     onLongClick = {
-                        // 🔥 JURUS KAGEBUNSHIN (DUPLICATE) 🔥
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        val duplicateTx = obj.copy(transaction = trans.copy(id = 0, name = "${trans.name} (Copy)"))
-                        onEdit(duplicateTx)
+                        if (!isSelectionMode) {
+                            onToggleSelect()
+                        } else {
+                            val duplicateTx = obj.copy(transaction = trans.copy(id = 0, name = "${trans.name} (Copy)"))
+                            onEdit(duplicateTx)
+                        }
                     }
                 ),
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = if (trans.category == "Transfer") Color(0xFF1976D2) else Color(0xFFD5641C))
+            colors = CardDefaults.cardColors(containerColor = finalCardColor)
         ) {
             Row(
                 modifier = Modifier.padding(18.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(45.dp)
-                        .background(Color.White.copy(alpha = 0.3f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                if (isSelectionMode) {
+                    Box(
+                        modifier = Modifier
+                            .size(30.dp)
+                            .background(if (isSelected) AppPrimary() else Color.White.copy(alpha = 0.3f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isSelected) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(45.dp)
+                            .background(Color.White.copy(alpha = 0.3f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
                 }
-
-                Spacer(modifier = Modifier.width(16.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(trans.name, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -3783,7 +4024,7 @@ fun TransactionItem(
                 AutoSizeText(
                     text = "${if (trans.isIncome) "+ " else "- "} $curSym $formatted",
                     color = if (trans.isIncome) Color.White else AppText(),
-                    fontSize = 16.sp, // 🔥 INI OBATNYA UDAH GUA PASANG 🔥
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.widthIn(max = 120.dp).padding(start = 8.dp).blur(blurRadius),
                     minimumFallbackSize = 10.sp
@@ -3802,14 +4043,12 @@ fun updateKumaWidget(context: Context) {
     } catch (_: Exception) {}
 }
 
-// --- EASTER EGG LOGIC ---
 fun checkAndApplyPrideEasterEgg(context: android.content.Context, userName: String?) {
     if (userName.isNullOrEmpty()) return
 
     val pm = context.packageManager
     val pkg = context.packageName
 
-    // Cocokin sama nama alias di AndroidManifest.xml
     val normalIcon = android.content.ComponentName(context, "$pkg.MainActivityAliasNormal")
     val prideIcon = android.content.ComponentName(context, "$pkg.MainActivityAliasPride")
     val bearIcon = android.content.ComponentName(context, "$pkg.MainActivityAliasBear")
@@ -3823,7 +4062,6 @@ fun checkAndApplyPrideEasterEgg(context: android.content.Context, userName: Stri
                 android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
             }
 
-            // Biar gak spam force close kalau iconnya udah bener
             if (pm.getComponentEnabledSetting(icon) != state) {
                 pm.setComponentEnabledSetting(
                     icon,
@@ -3834,35 +4072,27 @@ fun checkAndApplyPrideEasterEgg(context: android.content.Context, userName: Stri
         }
     }
 
-    // Cuma aktif kalau bulan Juni (Calendar.JUNE = 5)
     val currentMonth = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH)
     if (currentMonth == java.util.Calendar.JUNE) {
         when {
-            // Kita pake emoji Pelangi biasa atau hashtag biar 100% aman masuk database
             userName.contains("🌈") || userName.contains("#pride", ignoreCase = true) -> setIcon(
                 prideIcon
             )
-
             userName.contains("🐻") || userName.contains("#bear", ignoreCase = true) -> setIcon(
                 bearIcon
             )
-
             else -> setIcon(normalIcon)
         }
     } else {
-        setIcon(normalIcon) // Paksa balik ke normal kalau udah lewat Juni
+        setIcon(normalIcon)
     }
-
 }
 
-// Taruh di luar class, bebas di paling bawah file
 fun evaluateMathExpression(input: String): Long? {
     return try {
-        // Ilangin semua spasi biar kaga error
         val expression = input.replace("\\s".toRegex(), "")
         if (expression.isEmpty()) return null
 
-        // Logika parser ringan buat ngitung +, -, *, /
         object : Any() {
             var pos = -1
             var ch = 0
@@ -3890,8 +4120,8 @@ fun evaluateMathExpression(input: String): Long? {
             fun parseExpression(): Double {
                 var x = parseTerm()
                 while (true) {
-                    if (eat('+'.code)) x += parseTerm() // Tambah
-                    else if (eat('-'.code)) x -= parseTerm() // Kurang
+                    if (eat('+'.code)) x += parseTerm()
+                    else if (eat('-'.code)) x -= parseTerm()
                     else return x
                 }
             }
@@ -3899,8 +4129,8 @@ fun evaluateMathExpression(input: String): Long? {
             fun parseTerm(): Double {
                 var x = parseFactor()
                 while (true) {
-                    if (eat('*'.code)) x *= parseFactor() // Kali
-                    else if (eat('/'.code)) x /= parseFactor() // Bagi
+                    if (eat('*'.code)) x *= parseFactor()
+                    else if (eat('/'.code)) x /= parseFactor()
                     else return x
                 }
             }
@@ -3923,6 +4153,6 @@ fun evaluateMathExpression(input: String): Long? {
             }
         }.parse().toLong()
     } catch (e: Exception) {
-        null // Kalau user ngetik ngawur (misal "15000+"), balikin null aja kaga usah error
+        null
     }
 }
