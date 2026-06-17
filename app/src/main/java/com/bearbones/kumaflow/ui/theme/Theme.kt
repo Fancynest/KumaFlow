@@ -36,19 +36,31 @@ private val LightColorScheme = lightColorScheme(
     onSurface = DeepGrizzly
 )
 
+// Pastiin lo punya tipe data buat state Settings lo, misal:
+enum class ThemePreference { LIGHT, DARK, SYSTEM }
+
 @Composable
 fun KumaFlowTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    // 1. Ganti parameter biar nerima state langsung dari DataStore/ViewModel
+    themePref: ThemePreference = ThemePreference.SYSTEM,
     // WAJIB FALSE: Biar warna HP Oppo Reno 7 temen-temen lo gak nimpa warna desain asli lo!
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
+    // 2. Evaluasi mutlak ada di sini:
+    val isDark = when (themePref) {
+        ThemePreference.LIGHT -> false
+        ThemePreference.DARK -> true
+        ThemePreference.SYSTEM -> isSystemInDarkTheme()
+    }
+
+    // 3. Terapin isDark ke pembagian color scheme
     val colorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        darkTheme -> DarkColorScheme
+        isDark -> DarkColorScheme
         else -> LightColorScheme
     }
 
@@ -58,7 +70,8 @@ fun KumaFlowTheme(
         SideEffect {
             val window = (view.context as Activity).window
             window.statusBarColor = colorScheme.background.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            // 4. Update juga toggle light status bar-nya pake isDark
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !isDark
         }
     }
 

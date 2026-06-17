@@ -109,6 +109,8 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.border
 import com.bearbones.kumaflow.NewUserAnnouncementDialog
 
 // --- DATA CLASSES & OBJECTS ---
@@ -142,7 +144,7 @@ object AppStr {
     val date get() = if(isId) "Tanggal" else "Date"
     val tar get() = "Target Global"
     val catBudget get() = if(isId) "Budget Kategori" else "Category Budget"
-    const val VERSION = "v4.5.1"
+    const val VERSION = "v4.6.5"
     val dat get() = "Data"
     val expPdf get() = if(isId) "Ekspor ke PDF" else "Export to PDF"
     val expCsv get() = if(isId) "Ekspor ke CSV" else "Export to CSV"
@@ -233,7 +235,7 @@ object AppStr {
     val backupReminderMsg get() = if(isId) "Data kamu udah makin banyak nih. Mending backup dulu filenya biar nggak hilang kalo HP kamu kenapa-kenapa. \uD83D\uDC3B" else "You have a lot of data now. Better backup your file so you don't lose it if something happens to your phone. \uD83D\uDC3B"
     val backupNow get() = if(isId) "Backup Sekarang" else "Backup Now"
     val later get() = if(isId) "Nanti Aja" else "Later"
-    val versionInfo get() = if(isId) "Versi: $VERSION\nBuild: Edit Category Icon\nTipe: Standalone Local" else "Version: $VERSION\nBuild: Edit Category Icon\nType: Standalone Local"
+    val versionInfo get() = if(isId) "Versi: $VERSION\nBuild: Beta\nTipe: Standalone Local" else "Version: $VERSION\nBuild: Edit Category Icon\nType: Standalone Local"
 }
 
 // ... [KumaIconLibrary] ...
@@ -815,20 +817,30 @@ class MainActivity : FragmentActivity() {
                 LocalIsAmoled provides isAmoled
             ) {
                 val colorScheme = when {
-                    // 1. Easter Egg Pride & Bear (Prioritas paling tinggi kalau lagi bulan Juni)
+                    // 1. Easter Egg Pride & Bear
                     isPrideTriggered && activeThemeMode == 3 -> lightColorScheme(background = Color(0xFFFCE4EC), surface = Color(0xFFF8BBD0), primary = Color(0xFFD81B60), onPrimary = Color.White, onBackground = Color(0xFF212121), onSurface = Color(0xFF212121))
                     isPrideTriggered && activeThemeMode == 4 -> darkColorScheme(background = Color(0xFF121212), surface = Color(0xFF263238), primary = Color(0xFFAA00FF), onPrimary = Color.White, onBackground = Color.White, onSurface = Color.White)
                     isBearTriggered && activeThemeMode == 5 -> lightColorScheme(background = Color(0xFFFFF3E0), surface = Color(0xFFFFE0B2), primary = Color(0xFFBF360C), onPrimary = Color.White, onBackground = Color(0xFF3E2723), onSurface = Color(0xFF3E2723))
                     isBearTriggered && activeThemeMode == 6 -> darkColorScheme(background = Color(0xFF3E2723), surface = Color(0xFF4E342E), primary = Color(0xFFFFCA28), onPrimary = Color.Black, onBackground = Color(0xFFEFEBE9), onSurface = Color(0xFFEFEBE9))
 
-                    // 2. 🔥 MATERIAL YOU (Dynamic Color) BUAT ANDROID 12+ 🔥
+                    // 🔥 LOGIC BARU: DYNAMIC COLOR + AMOLED FUSION! 🔥
                     activeThemeMode == 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-                        if (isDark) androidx.compose.material3.dynamicDarkColorScheme(context)
-                        else androidx.compose.material3.dynamicLightColorScheme(context)
+                        // Ambil dulu palet warna dari wallpaper HP lu
+                        val dynamicTheme = if (isDark) androidx.compose.material3.dynamicDarkColorScheme(context) else androidx.compose.material3.dynamicLightColorScheme(context)
+
+                        // Kalau mode gelap DAN amoled nyala, bajak background-nya aja biar item pekat!
+                        if (isDark && isAmoled) {
+                            dynamicTheme.copy(
+                                background = Color(0xFF000000), // Item mati 100%
+                                surface = Color(0xFF121212) // Surface tetep ada gradasi abu dikit biar misah dari background
+                            )
+                        } else {
+                            dynamicTheme
+                        }
                     }
 
-                    // 3. Fallback buat OS Jadul atau Tema Default (Light/Dark/Amoled)
-                    isDark -> if (isAmoled) darkColorScheme(background = Color(0xFF000000), surface = Color(0xFF0F0F0F), onBackground = Color(0xFFE0E0E0), onSurface = Color(0xFFE0E0E0), primary = Color(0xFFD5641C), onPrimary = Color.White) else darkColorScheme(background = Color(0xFF121212), surface = Color(0xFF1E1E1E), onBackground = Color(0xFFE0E0E0), onSurface = Color(0xFFE0E0E0), primary = Color(0xFFD5641C), onPrimary = Color.White)
+                    // 3. Fallback Default
+                    isDark -> if (isAmoled) darkColorScheme(background = Color(0xFF000000), surface = Color(0xFF121212), onBackground = Color(0xFFE0E0E0), onSurface = Color(0xFFE0E0E0), primary = Color(0xFFD5641C), onPrimary = Color.White) else darkColorScheme(background = Color(0xFF121212), surface = Color(0xFF1E1E1E), onBackground = Color(0xFFE0E0E0), onSurface = Color(0xFFE0E0E0), primary = Color(0xFFD5641C), onPrimary = Color.White)
                     else -> lightColorScheme(background = Color(0xFFD9D2C5), surface = Color(0xFFC7BCAC), onBackground = Color(0xFF4A2F1D), onSurface = Color(0xFF4A2F1D), primary = Color(0xFF4A2F1D), onPrimary = Color.White)
                 }
 
@@ -1741,8 +1753,15 @@ fun HomeScreen(
                 val defaultSurfaceColor = AppSurface()
 
                 Box(
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 250.dp).clip(RoundedCornerShape(32.dp)).background(if (isPrideThemeActive) prideGradient else androidx.compose.ui.graphics.SolidColor(defaultSurfaceColor))
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 250.dp)
+                        // 🔥 BORDER BALANCE BOX 🔥
+                        .border(1.dp, AppText().copy(alpha = 0.15f), RoundedCornerShape(32.dp))
+                        .clip(RoundedCornerShape(32.dp))
+                        .background(if (isPrideThemeActive) prideGradient else androidx.compose.ui.graphics.SolidColor(defaultSurfaceColor))
                 ) {
+                    // Isi konten balance (Column) biarin kaga usah diubah
                     Column(modifier = Modifier.padding(vertical = 32.dp).fillMaxSize(), verticalArrangement = Arrangement.Center) {
                         Column(modifier = Modifier.padding(horizontal = 32.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1790,7 +1809,11 @@ fun HomeScreen(
                     leadingIcon = { Icon(Icons.Default.Search, null, tint = AppText().copy(alpha = 0.5f)) },
                     trailingIcon = { if (searchQuery.isNotEmpty()) { IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Close, null, tint = AppText()) } } },
                     modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), shape = RoundedCornerShape(16.dp), singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = AppPrimary(), unfocusedBorderColor = AppSurfaceVariant())
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AppPrimary(),
+                        // 🔥 BORDER SEARCH BAR BIAR KAGA NYARU 🔥
+                        unfocusedBorderColor = AppText().copy(alpha = 0.25f)
+                    )
                 )
 
                 Text(AppStr.recTx, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = AppText())
@@ -1854,7 +1877,7 @@ fun ReportScreen(
     selectedMonth: Int,
     selectedYear: Int,
     onMonthChange: (Int, Int) -> Unit,
-    onOpenWrapped: (Int, Int) -> Unit = { _, _ -> } // 🔥 UPDATE PARAMETER
+    onOpenWrapped: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val locale = Locale.forLanguageTag("id-ID")
     val curSym = when(profile.currency) { "USD", "AUD", "CAD", "SGD" -> "$"; "EUR" -> "€"; "GBP" -> "£"; "JPY", "CNY" -> "¥"; "CHF" -> "CHF"; else -> "Rp" }
@@ -1874,7 +1897,6 @@ fun ReportScreen(
         MonthYearSelector(selectedMonth, selectedYear, onMonthChange)
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 🔥 LOGIKA NAMA BULAN DINAMIS & TOMBOL REWATCH 🔥
         val monthNamesList = if (AppStr.isId) listOf("Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember") else listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
         val currentSelectedMonthName = monthNamesList.getOrElse(selectedMonth - 1) { "" }
 
@@ -1895,7 +1917,15 @@ fun ReportScreen(
         val prideGradient = Brush.linearGradient(colors = listOf(Color(0xFFE40303), Color(0xFFFF8C00), Color(0xFFFFED00), Color(0xFF008026), Color(0xFF24408E), Color(0xFF732982)))
         val defaultSurfaceColor = AppSurface()
 
-        Box(modifier = Modifier.fillMaxWidth().heightIn(min = 185.dp).clip(RoundedCornerShape(32.dp)).background(if (isPrideThemeActive) prideGradient else androidx.compose.ui.graphics.SolidColor(defaultSurfaceColor))) {
+        // 🔥 BORDER KEBAL 1: Di Box Summary Kiri Atas
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 185.dp)
+                .border(1.dp, AppText().copy(alpha = 0.1f), RoundedCornerShape(32.dp))
+                .clip(RoundedCornerShape(32.dp))
+                .background(if (isPrideThemeActive) prideGradient else androidx.compose.ui.graphics.SolidColor(defaultSurfaceColor))
+        ) {
             Row(modifier = Modifier.padding(24.dp).fillMaxSize(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                     Text(AppStr.sum, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = if (isPrideThemeActive) Color.White else AppText())
@@ -1927,7 +1957,14 @@ fun ReportScreen(
         Text(AppStr.spendBreak, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = AppText())
         Spacer(modifier = Modifier.height(12.dp))
 
-        Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(32.dp), colors = CardDefaults.cardColors(containerColor = AppSurface())) {
+        // 🔥 BORDER KEBAL 2: Di Card Rincian Pengeluaran
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, AppText().copy(alpha = 0.1f), RoundedCornerShape(32.dp)),
+            shape = RoundedCornerShape(32.dp),
+            colors = CardDefaults.cardColors(containerColor = AppSurface())
+        ) {
             Column(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(modifier = Modifier.size(180.dp).padding(16.dp), contentAlignment = Alignment.Center) {
                     val bgArcCol = AppSurfaceVariant()
@@ -1957,7 +1994,16 @@ fun ReportScreen(
                             val progress = if (target > 0) (amt.toFloat() / target.toFloat()).coerceIn(0f, 1f) else 0f
                             val isOverLimit = target > 0 && amt > target
 
-                            Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).height(55.dp), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = AppSurfaceVariant().copy(alpha = 0.5f))) {
+                            // 🔥 BORDER KEBAL 3: Di item kategori dalam rincian
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .height(55.dp)
+                                    .border(1.dp, AppText().copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = AppSurfaceVariant().copy(alpha = 0.5f))
+                            ) {
                                 Box(modifier = Modifier.fillMaxSize()) {
                                     if (target > 0) Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(progress).background(catCol.copy(alpha = 0.2f)).align(Alignment.CenterStart))
                                     Row(modifier = Modifier.padding(horizontal = 16.dp).fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
@@ -1982,7 +2028,15 @@ fun ReportScreen(
         Text(AppStr.trends, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp, color = AppText())
         Spacer(modifier = Modifier.height(12.dp))
 
-        Card(modifier = Modifier.fillMaxWidth().height(280.dp), shape = RoundedCornerShape(32.dp), colors = CardDefaults.cardColors(containerColor = AppSurface())) {
+        // 🔥 BORDER KEBAL 4: Di Card Tren Bulanan
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(280.dp)
+                .border(1.dp, AppText().copy(alpha = 0.1f), RoundedCornerShape(32.dp)),
+            shape = RoundedCornerShape(32.dp),
+            colors = CardDefaults.cardColors(containerColor = AppSurface())
+        ) {
             Column(modifier = Modifier.padding(16.dp).fillMaxSize()) {
                 val greenCol = AppGreen()
                 val redCol = AppRed()
@@ -2291,7 +2345,10 @@ fun SettingsScreen(
             }
 
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // 🔥 BORDER CARD NOTIFIKASI 🔥
+                    .border(1.dp, AppText().copy(alpha = 0.15f), RoundedCornerShape(28.dp)),
                 shape = RoundedCornerShape(28.dp),
                 colors = CardDefaults.cardColors(containerColor = AppSurface())
             ) {
@@ -3383,7 +3440,14 @@ fun SettingsGroupCard(
     onClick: (String) -> Unit
 ) {
     Card(
-        modifier = modifier.heightIn(min = 230.dp),
+        modifier = modifier
+            .heightIn(min = 230.dp)
+            // 🔥 BORDER KEBAL NYA DI SINI 🔥
+            .border(
+                width = 1.dp,
+                color = AppText().copy(alpha = 0.15f),
+                shape = RoundedCornerShape(28.dp)
+            ),
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = AppSurface())
     ) {
@@ -3442,6 +3506,8 @@ fun CustomBottomNav(
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 20.dp)
             .height(85.dp)
+            // 🔥 BORDER BOTTOM NAV 🔥
+            .border(1.dp, AppText().copy(alpha = 0.15f), RoundedCornerShape(24.dp))
             .clip(RoundedCornerShape(24.dp))
             .background(AppSurface())
     ) {
