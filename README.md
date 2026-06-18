@@ -1,40 +1,67 @@
-KumaFlow 🐻💸
+<div align="center">
+  <h1>🐻 KumaFlow</h1>
+  <p><b>A beautifully crafted, privacy-first Android personal finance manager.</b></p>
 
-KumaFlow is a lightweight, privacy-focused Android application for managing personal cash flow. Built entirely offline with no external servers, it is designed simply to get the job done efficiently and securely.
----
+  [![Kotlin](https://img.shields.io/badge/Kotlin-100%25-blue?logo=kotlin)](#)
+  [![Jetpack Compose](https://img.shields.io/badge/Jetpack_Compose-Ready-green?logo=android)](#)
+  [![Room](https://img.shields.io/badge/Room-Database-orange?logo=sqlite)](#)
+  [![Offline First](https://img.shields.io/badge/Privacy-100%25_Offline-purple)](#)
+</div>
 
-📱 Key Features
+<br/>
 
-- Biometric Security: Keep your data safe with Fingerprint/Face ID & 6-digit PIN. 
-- Dark Mode Aesthetic: Clean UI designed for a focused financial tracking experience. 
-- Privacy First: 100% Offline with Local Room Database—your data never leaves your device. 
-- Smart Reports: Track spending breakdowns and monthly trends effortlessly. 
-- Lightweight: Optimized APK size (approx. 17MB).
-
----
-
-🛠 Tech Stack
-
-- Language: Kotlin 
-- UI Framework: Jetpack Compose 
-- Local Database: Room 
-- Build System: Gradle (KTS) 
+**KumaFlow** is a lightweight, privacy-focused Android application designed for managing personal cash flow. Built entirely offline with no external servers, it is tailored for users who value data security and a stunning, distraction-free aesthetic. 
 
 ---
 
-📦 Getting Started
- 
-- Min SDK: 27 (Android 8.1) 
+## ✨ Features
 
-🚀 For Developers
-1. Clone the repo
-2. Open project in Android Studio 
-3. Sync Gradle and Run on your device!
+- 🔐 **Fort Knox Security**: Keep your data safe with **Biometric Authentication** (Fingerprint/Face ID) and a 6-digit PIN.
+- 🎨 **Dynamic Aesthetic**: Enjoy a sleek Dark Mode or turn on **AMOLED Fusion** for pure black backgrounds. Features custom themes and dynamic colors.
+- 📊 **Smart Reports & Wrapped**: Visualize your spending habits with interactive charts. Check out your personalized **"KumaFlow Wrapped"** at the end of every month.
+- 🧮 **Split Wallet Logic**: Advanced transaction handling that calculates and allocates split transaction values across different wallets effortlessly.
+- 🕵️ **100% Privacy-First**: No servers. No telemetry. Your data is stored locally via Room Database and never leaves your device.
+- 💾 **Export Your Data**: Easily export your financial records to PDF or CSV.
+- 🪶 **Extremely Lightweight**: Highly optimized APK size (~17MB) with custom background Services & Alarm Managers that bypass aggressive OS battery optimizations.
 
 ---
 
-👨‍💻 Author
-Gabriel 🐻
+## 🛠️ Architecture & Tech Stack
 
-📄 License
-This project is for educational and portfolio purposes.
+KumaFlow recently underwent a major architectural refactor to adhere to **industry-standard clean architecture** principles. 
+
+- **Language:** Kotlin
+- **UI Framework:** Jetpack Compose (100% Declarative UI)
+- **Local Storage:** Room Database (with robust DAO and Migration support)
+- **Background Tasks:** Kotlin Coroutines & Flow
+- **Structure:** Modularized screens (`LockScreen`, `HomeScreen`, `ReportScreen`, `SettingsScreen`) for extreme maintainability and clean code practices.
+
+---
+
+## 🚀 Getting Started
+
+Want to run KumaFlow or explore the code? Here is how to get started:
+
+### Prerequisites
+- **Android Studio** (Koala or newer recommended)
+- **Min SDK:** 27 (Android 8.1 Oreo)
+- **Target SDK:** 34
+
+### Installation
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Fancynest/KumaFlow.git
+   ```
+2. Open the project in Android Studio.
+3. Sync Gradle and ensure all dependencies are downloaded.
+4. Run the app on your emulator or physical device.
+
+---
+
+## 👨‍💻 Author
+
+Crafted with passion by **Gabriel** 🐻.
+
+## 📄 License
+
+This project is intended for educational and portfolio purposes. Feel free to clone, learn from the architecture, and explore the power of Jetpack Compose!
