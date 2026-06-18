@@ -1562,13 +1562,15 @@ fun TransactionItem(
 
     val blurRadius by androidx.compose.animation.core.animateDpAsState(targetValue = if (isPrivacyMode) 12.dp else 0.dp, label = "blur_tx_anim")
 
-    val curSym = when(profile.currency) {
-        "USD", "AUD", "CAD", "SGD" -> "$"
-        "EUR" -> "€"
-        "GBP" -> "£"
-        "JPY", "CNY" -> "¥"
-        "CHF" -> "CHF"
-        else -> "Rp"
+    val curSym = remember(profile.currency) {
+        when(profile.currency) {
+            "USD", "AUD", "CAD", "SGD" -> "$"
+            "EUR" -> "€"
+            "GBP" -> "£"
+            "JPY", "CNY" -> "¥"
+            "CHF" -> "CHF"
+            else -> "Rp"
+        }
     }
 
     val savedIcons = remember(profile.categoryIcons) {
@@ -1730,10 +1732,12 @@ fun TransactionItem(
                     Text("${trans.wallet} • ${trans.category}", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
 
-                val formatted = try {
-                    NumberFormat.getInstance(Locale.forLanguageTag("id-ID")).format(trans.amount.toLong())
-                } catch (_: Exception) {
-                    trans.amount
+                val formatted = remember(trans.amount) {
+                    try {
+                        NumberFormat.getInstance(Locale.forLanguageTag("id-ID")).format(trans.amount.toLong())
+                    } catch (_: Exception) {
+                        trans.amount
+                    }
                 }
 
                 AutoSizeText(

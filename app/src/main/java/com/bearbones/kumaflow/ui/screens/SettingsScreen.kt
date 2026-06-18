@@ -276,7 +276,7 @@ fun SettingsScreen(
                     items = listOf(
                         AppStr.cur to Icons.Default.Sync,
                         AppStr.manageWallet to Icons.Default.AccountBalanceWallet,
-                        AppStr.manageCat to Icons.Default.Category,
+                        AppStr.manageCat to Icons.Default.DashboardCustomize,
                         AppStr.tar to Icons.Default.Adjust,
                         AppStr.catBudget to Icons.Default.PieChart
                     ),
@@ -889,17 +889,34 @@ fun SettingsScreen(
                 onDismissRequest = { showCurrencyDialog = false },
                 title = { Text(AppStr.selCur) },
                 text = {
+                    val currencies = listOf(
+                        "IDR" to "🇮🇩", "USD" to "🇺🇸", "EUR" to "🇪🇺", "JPY" to "🇯🇵",
+                        "GBP" to "🇬🇧", "AUD" to "🇦🇺", "CAD" to "🇨🇦", "CHF" to "🇨🇭",
+                        "CNY" to "🇨🇳", "SGD" to "🇸🇬"
+                    )
                     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                        listOf("IDR", "USD", "EUR", "JPY", "GBP", "AUD", "CAD", "CHF", "CNY", "SGD").forEach { c ->
-                            TextButton(
-                                onClick = {
-                                    scope.launch {
-                                        dao.saveProfile(currentProfile.copy(currency = c))
-                                        onForceUpdate()
-                                        showCurrencyDialog = false
+                        currencies.chunked(2).forEach { rowItems ->
+                            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                rowItems.forEach { (c, flag) ->
+                                    Button(
+                                        onClick = {
+                                            scope.launch {
+                                                dao.saveProfile(currentProfile.copy(currency = c))
+                                                onForceUpdate()
+                                                showCurrencyDialog = false
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.buttonColors(containerColor = AppPrimary().copy(alpha = 0.2f), contentColor = AppPrimary()),
+                                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text("$flag  $c", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
-                            ) { Text(c) }
+                                if (rowItems.size == 1) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
                         }
                     }
                 },

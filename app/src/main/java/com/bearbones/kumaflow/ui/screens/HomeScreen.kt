@@ -336,7 +336,7 @@ fun HomeScreen(
                         }
                     }
 
-                    items(txs) { item ->
+                    items(txs, key = { it.transaction.id }) { item ->
                         val isSelected = selectedTxs.contains(item.transaction.id)
                         Box(modifier = Modifier.padding(horizontal = 24.dp)) {
                             TransactionItem(
