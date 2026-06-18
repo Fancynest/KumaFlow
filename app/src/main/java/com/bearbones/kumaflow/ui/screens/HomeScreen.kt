@@ -196,7 +196,8 @@ fun HomeScreen(
                         }
                     }
 
-                    Text(if (AppStr.isId) "Halo, ${profile.userName}!" else "Hello, ${profile.userName}!", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
+                    val displayName = profile.userName.replace("#pride", "", ignoreCase = true).replace("#bear", "", ignoreCase = true).trim()
+                    Text(if (AppStr.isId) "Halo, $displayName!" else "Hello, $displayName!", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
                     Spacer(modifier = Modifier.height(16.dp))
                     MonthYearSelector(selectedMonth, selectedYear, onMonthChange)
                     Spacer(modifier = Modifier.height(24.dp))
