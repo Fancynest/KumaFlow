@@ -126,7 +126,7 @@ fun LockScreen(correctPin: String, activity: FragmentActivity, onSuccess: () -> 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(AppBg())
+            .background(if (androidx.compose.foundation.isSystemInDarkTheme()) androidx.compose.ui.graphics.Color.Black.copy(alpha=0.2f) else androidx.compose.ui.graphics.Color.White.copy(alpha=0.4f))
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

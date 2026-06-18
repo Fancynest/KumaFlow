@@ -296,7 +296,7 @@ fun HomeScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(AppBg())
+                                .background(if (androidx.compose.foundation.isSystemInDarkTheme()) androidx.compose.ui.graphics.Color.Black.copy(alpha=0.2f) else androidx.compose.ui.graphics.Color.White.copy(alpha=0.4f))
                                 .padding(horizontal = 24.dp, vertical = 8.dp)
                         ) {
                             Text(

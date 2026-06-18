@@ -106,6 +106,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
+import com.bearbones.kumaflow.ui.components.BokehBackground
 import dev.chrisbanes.haze.*
 import androidx.compose.ui.draw.blur
 import androidx.compose.animation.core.animateDpAsState
@@ -182,14 +183,13 @@ fun Modifier.glassCard(
     fallbackColor: Color,
     useHaze: Boolean = false
 ): Modifier {
+    val glassColor = if (LocalIsDark.current) {
+        if (fallbackColor.luminance() > 0.5f) Color.Black.copy(alpha = 0.4f) else fallbackColor.copy(alpha = 0.5f)
+    } else {
+        if (fallbackColor.luminance() < 0.5f) Color.White.copy(alpha = 0.4f) else fallbackColor.copy(alpha = 0.5f)
+    }
     return if (LocalIsLiquidGlass.current) {
-        val glassColor = if (LocalIsDark.current) {
-            if (fallbackColor.luminance() > 0.5f) Color.Black.copy(alpha = 0.2f) else fallbackColor.copy(alpha = 0.3f)
-        } else {
-            if (fallbackColor.luminance() < 0.5f) Color.White.copy(alpha = 0.2f) else fallbackColor.copy(alpha = 0.3f)
-        }
         this.clip(androidx.compose.foundation.shape.RoundedCornerShape(radius))
-            .let { if (useHaze) it.hazeChild(state = LocalHazeState.current) else it }
             .background(glassColor)
             .border(1.dp, Color.White.copy(alpha = 0.2f), androidx.compose.foundation.shape.RoundedCornerShape(radius))
     } else {
@@ -307,8 +307,10 @@ fun MainScreen(
 
     val hazeState = remember { HazeState() }
     CompositionLocalProvider(LocalHazeState provides hazeState) {
-        Scaffold(
-            containerColor = AppBg(),
+        Box(modifier = Modifier.fillMaxSize().background(AppBg())) {
+            BokehBackground()
+            Scaffold(
+                containerColor = Color.Transparent,
         floatingActionButton = {
             val showFab = selectedItemIndex != 2 && (selectedItemIndex != 0 || isFabVisible) && !isSelectionMode
             if (showFab) {
@@ -318,7 +320,7 @@ fun MainScreen(
                     elevation = FloatingActionButtonDefaults.elevation(defaultElevation = if (LocalIsLiquidGlass.current) 0.dp else 6.dp),
                     contentColor = if (LocalIsLiquidGlass.current) AppPrimary() else Color.White,
                     shape = CircleShape,
-                    modifier = Modifier.size(70.dp).let { if (LocalIsLiquidGlass.current) it.clip(CircleShape).hazeChild(state = LocalHazeState.current).border(1.dp, Color.White.copy(0.3f), CircleShape) else it }
+                    modifier = Modifier.size(70.dp).let { if (LocalIsLiquidGlass.current) it.clip(CircleShape).background(if (LocalIsDark.current) Color.Black.copy(alpha=0.4f) else Color.White.copy(alpha=0.4f), CircleShape).border(1.dp, Color.White.copy(0.3f), CircleShape) else it }
                 ) { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(40.dp)) }
             }
         },
@@ -418,6 +420,7 @@ fun MainScreen(
         }
     }
     }
+}
 }
 
 @OptIn(ExperimentalFoundationApi::class)
