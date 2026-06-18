@@ -30,6 +30,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -124,6 +125,7 @@ fun HomeScreen(
     expenses: Long,
     selectedMonth: Int,
     selectedYear: Int,
+    paddingValues: PaddingValues,
     onMonthChange: (Int, Int) -> Unit,
     onEdit: (TransactionWithSplits) -> Unit,
     onDelete: (TransactionWithSplits) -> Unit,
@@ -166,7 +168,8 @@ fun HomeScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().padding(top = 24.dp)
+            modifier = Modifier.fillMaxSize().padding(top = 24.dp),
+            contentPadding = PaddingValues(bottom = paddingValues.calculateBottomPadding() + 24.dp)
         ) {
             item {
                 Column(modifier = Modifier.padding(horizontal = 24.dp)) {

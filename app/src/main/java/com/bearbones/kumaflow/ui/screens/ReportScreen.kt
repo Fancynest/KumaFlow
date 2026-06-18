@@ -30,6 +30,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -124,6 +125,7 @@ fun ReportScreen(
     balance: Long,
     selectedMonth: Int,
     selectedYear: Int,
+    paddingValues: PaddingValues,
     onMonthChange: (Int, Int) -> Unit,
     onOpenWrapped: (Int, Int) -> Unit = { _, _ -> }
 ) {

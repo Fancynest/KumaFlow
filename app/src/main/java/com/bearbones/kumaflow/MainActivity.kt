@@ -180,7 +180,7 @@ fun Modifier.glassmorphic(
 fun Modifier.glassCard(
     radius: androidx.compose.ui.unit.Dp = 16.dp,
     fallbackColor: Color,
-    useHaze: Boolean = true
+    useHaze: Boolean = false
 ): Modifier {
     return if (LocalIsLiquidGlass.current) {
         val glassColor = if (LocalIsDark.current) {
@@ -308,7 +308,6 @@ fun MainScreen(
     val hazeState = remember { HazeState() }
     CompositionLocalProvider(LocalHazeState provides hazeState) {
         Scaffold(
-            modifier = Modifier.haze(state = hazeState),
             containerColor = AppBg(),
         floatingActionButton = {
             val showFab = selectedItemIndex != 2 && (selectedItemIndex != 0 || isFabVisible) && !isSelectionMode
@@ -337,6 +336,7 @@ fun MainScreen(
                         expenses = totalExpenses,
                         selectedMonth = selectedMonth,
                         selectedYear = selectedYear,
+                        paddingValues = paddingValues,
                         onMonthChange = { m: Int, y: Int -> haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); selectedMonth = m; selectedYear = y },
                         onEdit = { t: TransactionWithSplits -> transactionToEdit = t; showBottomSheet = true },
                         onDelete = { t: TransactionWithSplits -> scope.launch { dao.deleteTransaction(t.transaction); updateKumaWidget(context) } },
@@ -370,11 +370,13 @@ fun MainScreen(
                     )
                     1 -> ReportScreen(
                         profile = userProfile, monthlyTransactions = monthlyTransactionsWithSplits.map { it.transaction }, allTransactions = transactionListWithSplits.map { it.transaction }, income = totalIncome, expenses = totalExpenses, balance = totalBalance, selectedMonth = selectedMonth, selectedYear = selectedYear,
+                        paddingValues = paddingValues,
                         onMonthChange = { m, y -> haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); selectedMonth = m; selectedYear = y },
                         onOpenWrapped = onOpenWrapped
                     )
                     2 -> SettingsScreen(
                         currentProfile = userProfile, monthlyTransactionsWithSplits = monthlyTransactionsWithSplits, allTransactionsWithSplits = transactionListWithSplits, dao = dao, selectedMonth = selectedMonth, selectedYear = selectedYear,
+                        paddingValues = paddingValues,
                         onForceUpdate = { forceUpdateTrigger++; updateKumaWidget(context) }
                     )
                 }
@@ -1428,7 +1430,7 @@ fun CustomBottomNav(
             .padding(horizontal = 24.dp, vertical = 20.dp)
             .height(85.dp)
             .border(1.dp, AppText().copy(alpha = 0.15f), RoundedCornerShape(24.dp))
-            .glassCard(24.dp, AppSurface())
+            .glassCard(24.dp, AppSurface(), useHaze = true)
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
