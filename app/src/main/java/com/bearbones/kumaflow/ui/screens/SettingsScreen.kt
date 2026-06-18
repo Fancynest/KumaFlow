@@ -1134,7 +1134,7 @@ fun SettingsScreen(
         }
 
         Text(
-            text = "KumaFlow ${AppStr.VERSION}$easterEggEmoji\nLocal Data Only â€¢ Privacy First",
+            text = "KumaFlow ${AppStr.VERSION}$easterEggEmoji\nLocal Data Only & Privacy First",
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 24.dp),

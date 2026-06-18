@@ -94,8 +94,8 @@ class KumaWidgetProvider : AppWidgetProvider() {
 
                 // Update widget UI components with the newly calculated data
                 views.setTextViewText(R.id.tv_widget_balance, "$curSym ${NumberFormat.getInstance(locale).format(totalBal)}")
-                views.setTextViewText(R.id.tv_widget_income, "↑ Income $curSym ${NumberFormat.getInstance(locale).format(income)}")
-                views.setTextViewText(R.id.tv_widget_expense, "↓ Expenses $curSym ${NumberFormat.getInstance(locale).format(expenses)}")
+                views.setTextViewText(R.id.tv_widget_income, "$curSym ${NumberFormat.getInstance(locale).format(income)}")
+                views.setTextViewText(R.id.tv_widget_expense, "$curSym ${NumberFormat.getInstance(locale).format(expenses)}")
 
                 if (top3Wallets.isNotEmpty()) {
                     views.setTextViewText(R.id.tv_w1_name, top3Wallets[0].key)
