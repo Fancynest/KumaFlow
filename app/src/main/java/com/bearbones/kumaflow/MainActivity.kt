@@ -105,6 +105,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 import kotlin.math.abs
+import dev.chrisbanes.haze.*
 import androidx.compose.ui.draw.blur
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -117,6 +118,7 @@ import androidx.compose.foundation.border
 val LocalIsDark = compositionLocalOf { true }
 val LocalIsAmoled = compositionLocalOf { false }
 val LocalIsLiquidGlass = compositionLocalOf { false }
+val LocalHazeState = compositionLocalOf { HazeState() }
 
 @Composable
 fun AppBg() = MaterialTheme.colorScheme.background
@@ -293,14 +295,21 @@ fun MainScreen(
     var showBackupReminder by remember { mutableStateOf(false) }
     val totalTxCount = transactionListWithSplits.size
 
-    Scaffold(
-        containerColor = AppBg(),
+    val hazeState = remember { HazeState() }
+    CompositionLocalProvider(LocalHazeState provides hazeState) {
+        Scaffold(
+            modifier = Modifier.let { if (LocalIsLiquidGlass.current) it.haze(state = hazeState) else it },
+            containerColor = AppBg(),
         floatingActionButton = {
             val showFab = selectedItemIndex != 2 && (selectedItemIndex != 0 || isFabVisible) && !isSelectionMode
             if (showFab) {
                 FloatingActionButton(
                     onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); transactionToEdit = null; showBottomSheet = true },
-                    containerColor = AppPrimary(), contentColor = Color.White, shape = CircleShape, modifier = Modifier.size(70.dp)
+                    containerColor = if (LocalIsLiquidGlass.current) Color.Transparent else AppPrimary(),
+                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = if (LocalIsLiquidGlass.current) 0.dp else 6.dp),
+                    contentColor = if (LocalIsLiquidGlass.current) AppPrimary() else Color.White,
+                    shape = CircleShape,
+                    modifier = Modifier.size(70.dp).let { if (LocalIsLiquidGlass.current) it.clip(CircleShape).hazeChild(state = LocalHazeState.current).border(1.dp, Color.White.copy(0.3f), CircleShape) else it }
                 ) { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(40.dp)) }
             }
         },
@@ -395,6 +404,7 @@ fun MainScreen(
                 shape = RoundedCornerShape(28.dp), containerColor = AppSurface(), titleContentColor = AppText(), textContentColor = AppText()
             )
         }
+    }
     }
 }
 
