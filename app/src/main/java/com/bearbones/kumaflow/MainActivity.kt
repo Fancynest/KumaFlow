@@ -308,7 +308,7 @@ fun MainScreen(
     val hazeState = remember { HazeState() }
     CompositionLocalProvider(LocalHazeState provides hazeState) {
         Scaffold(
-            modifier = Modifier.let { if (LocalIsLiquidGlass.current) it.haze(state = hazeState) else it },
+            modifier = Modifier.haze(state = hazeState),
             containerColor = AppBg(),
         floatingActionButton = {
             val showFab = selectedItemIndex != 2 && (selectedItemIndex != 0 || isFabVisible) && !isSelectionMode
