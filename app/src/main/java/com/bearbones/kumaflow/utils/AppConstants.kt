@@ -90,7 +90,7 @@ object AppStr {
     val themeLight get() = if(isId) "Mode Terang" else "Light Mode"
     val amoledDark get() = if(isId) "AMOLED Gelap" else "AMOLED Dark"
     val amoledDesc get() = if(isId) "Latar belakang hitam murni" else "Pure black background"
-    val liquidGlass get() = if(isId) "Liquid Glass UI" else "Liquid Glass UI"
+    val liquidGlass get() = if(isId) "Kuma Glass UI" else "Kuma Glass UI"
     val liquidGlassDesc get() = if(isId) "Efek kaca transparan premium" else "Premium transparent glass effect"
     val edit get() = if(isId) "Edit" else "Edit"
     val delete get() = if(isId) "Hapus" else "Delete"
