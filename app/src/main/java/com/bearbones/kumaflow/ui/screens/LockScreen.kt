@@ -310,7 +310,8 @@ class MainActivity : FragmentActivity() {
 
             CompositionLocalProvider(
                 LocalIsDark provides isDark,
-                LocalIsAmoled provides isAmoled
+                LocalIsAmoled provides isAmoled,
+                LocalIsLiquidGlass provides (userProfile?.isLiquidGlass == true)
             ) {
                 val colorScheme = when {
                     // 1. Easter Egg Pride & Bear
