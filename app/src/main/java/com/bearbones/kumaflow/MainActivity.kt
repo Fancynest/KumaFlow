@@ -1432,8 +1432,7 @@ fun CustomBottomNav(
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 20.dp)
             .height(85.dp)
-            .border(1.dp, AppText().copy(alpha = 0.15f), RoundedCornerShape(24.dp))
-            .glassCard(24.dp, AppSurface(), useHaze = true)
+            .background(androidx.compose.ui.graphics.Color.Transparent)
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),

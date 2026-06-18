@@ -1,4 +1,4 @@
-﻿@file:Suppress("SpellCheckingInspection", "UNUSED_PARAMETER", "unused", "CanBeVal", "DEPRECATION", "ScheduleExactAlarm")
+@file:Suppress("SpellCheckingInspection", "UNUSED_PARAMETER", "unused", "CanBeVal", "DEPRECATION", "ScheduleExactAlarm")
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.bearbones.kumaflow
@@ -296,7 +296,7 @@ fun HomeScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(if (androidx.compose.foundation.isSystemInDarkTheme()) androidx.compose.ui.graphics.Color.Black.copy(alpha=0.2f) else androidx.compose.ui.graphics.Color.White.copy(alpha=0.4f))
+                                .background(androidx.compose.ui.graphics.Color.Transparent)
                                 .padding(horizontal = 24.dp, vertical = 8.dp)
                         ) {
                             Text(
