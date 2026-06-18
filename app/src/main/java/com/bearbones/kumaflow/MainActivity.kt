@@ -326,7 +326,11 @@ fun MainScreen(
         },
         bottomBar = { CustomBottomNav(selectedItemIndex, haptic) { selectedItemIndex = it } }
     ) { paddingValues ->
-        Box(modifier = Modifier.padding(paddingValues)) {
+        Box(modifier = Modifier.padding(
+            top = paddingValues.calculateTopPadding(),
+            start = paddingValues.calculateStartPadding(androidx.compose.ui.platform.LocalLayoutDirection.current),
+            end = paddingValues.calculateEndPadding(androidx.compose.ui.platform.LocalLayoutDirection.current)
+        )) {
             HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                 when (page) {
                     0 -> HomeScreen(
@@ -1432,7 +1436,8 @@ fun CustomBottomNav(
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 20.dp)
             .height(85.dp)
-            .background(androidx.compose.ui.graphics.Color.Transparent)
+            .border(1.dp, AppText().copy(alpha = 0.15f), RoundedCornerShape(24.dp))
+            .glassCard(24.dp, AppSurface(), useHaze = false)
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
