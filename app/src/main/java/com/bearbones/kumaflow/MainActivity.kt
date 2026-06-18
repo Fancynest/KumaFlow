@@ -362,6 +362,7 @@ fun MainScreen(
                                 Toast.makeText(context, AppStr.txDeleted(listToDelete.size), Toast.LENGTH_SHORT).show()
                             }
                         },
+                        onUpdateProfile = { updatedProfile -> scope.launch { dao.saveProfile(updatedProfile); forceUpdateTrigger++; updateKumaWidget(context) } },
                         onBulkUpdateCategory = { listToUpdate: List<TransactionWithSplits>, newCat: String ->
                             scope.launch {
                                 listToUpdate.forEach { txObj ->
@@ -1470,7 +1471,9 @@ fun NavItem(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
+            .clip(RoundedCornerShape(50))
             .clickable { onClick() }
+            .padding(vertical = 8.dp, horizontal = 12.dp)
             .widthIn(max = 80.dp)
     ) {
         Icon(

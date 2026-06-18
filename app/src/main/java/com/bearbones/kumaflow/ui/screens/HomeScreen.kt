@@ -58,6 +58,7 @@ import androidx.compose.ui.Modifier
 import com.bearbones.kumaflow.glassCard
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import org.burnoutcrew.reorderable.*
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -135,7 +136,8 @@ fun HomeScreen(
     onToggleSelect: (Int) -> Unit,
     clearSelection: () -> Unit,
     onBulkDelete: (List<TransactionWithSplits>) -> Unit,
-    onBulkUpdateCategory: (List<TransactionWithSplits>, String) -> Unit
+    onBulkUpdateCategory: (List<TransactionWithSplits>, String) -> Unit,
+    onUpdateProfile: (UserProfile) -> Unit
 ) {
     val context = LocalContext.current
     val locale = java.util.Locale.forLanguageTag("id-ID")
@@ -231,12 +233,38 @@ fun HomeScreen(
                                 AutoSizeText(text = "$balPref$curSym ${NumberFormat.getInstance(locale).format(abs(balance))}", modifier = Modifier.fillMaxWidth().blur(blurRadius), fontSize = 48.sp, fontWeight = FontWeight.Black, color = Color.White, minimumFallbackSize = 24.sp)
                             }
                             Spacer(modifier = Modifier.height(20.dp))
-                            LazyRow(modifier = Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 32.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                items(walletBalances.toList()) { (walletName, amt) ->
-                                    val wBalPref = if (amt < 0) "- " else ""
-                                    Column(modifier = Modifier.glassCard(16.dp, AppBg().copy(alpha = 0.2f)).padding(horizontal = 16.dp, vertical = 10.dp)) {
-                                        Text(walletName, color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                        Text("$wBalPref$curSym ${NumberFormat.getInstance(locale).format(abs(amt))}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.blur(blurRadius))
+                            var walletData by remember(walletBalances) { mutableStateOf(walletBalances.toList()) }
+                            val reorderState = rememberReorderableLazyListState(
+                                onMove = { from, to ->
+                                    walletData = walletData.toMutableList().apply {
+                                        add(to.index, removeAt(from.index))
+                                    }
+                                },
+                                onDragEnd = { _, _ ->
+                                    onUpdateProfile(profile.copy(wallets = walletData.joinToString(",") { it.first }))
+                                }
+                            )
+
+                            LazyRow(
+                                state = reorderState.listState,
+                                modifier = Modifier.fillMaxWidth().reorderable(reorderState),
+                                contentPadding = PaddingValues(horizontal = 32.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                items(walletData, { it.first }) { item ->
+                                    ReorderableItem(reorderState, key = item.first) { isDragging ->
+                                        val amt = item.second
+                                        val walletName = item.first
+                                        val wBalPref = if (amt < 0) "- " else ""
+                                        Column(
+                                            modifier = Modifier
+                                                .detectReorderAfterLongPress(reorderState)
+                                                .glassCard(16.dp, AppBg().copy(alpha = 0.2f))
+                                                .padding(horizontal = 16.dp, vertical = 10.dp)
+                                        ) {
+                                            Text(walletName, color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            Text("$wBalPref$curSym ${NumberFormat.getInstance(locale).format(abs(amt))}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.blur(blurRadius))
+                                        }
                                     }
                                 }
                             }

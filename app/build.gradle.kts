@@ -1,4 +1,4 @@
-﻿plugins {
+plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -53,6 +53,7 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation("androidx.biometric:biometric:1.2.0-alpha05")
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("org.burnoutcrew.composereorderable:reorderable:0.9.6")
 
     // ROOM DATABASE (Stable Version)
     implementation("androidx.room:room-runtime:2.6.1")
