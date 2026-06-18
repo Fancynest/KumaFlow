@@ -542,6 +542,8 @@ fun SettingsScreen(
             }
             AlertDialog(
                 onDismissRequest = { showCatBudgetDialog = false },
+                modifier = Modifier.glassCard(24.dp, AppSurface()),
+                containerColor = if (LocalIsLiquidGlass.current) androidx.compose.ui.graphics.Color.Transparent else AppSurface(),
                 title = { Text(AppStr.catBudget, fontWeight = FontWeight.Bold) },
                 text = {
                     Box(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
@@ -587,7 +589,7 @@ fun SettingsScreen(
                 dismissButton = {
                     TextButton(onClick = { showCatBudgetDialog = false }) { Text(AppStr.close, color = AppText()) }
                 },
-                containerColor = AppSurface()
+                
             )
         }
 
@@ -599,6 +601,8 @@ fun SettingsScreen(
                     showWalletDialog = false
                     onForceUpdate()
                 },
+                modifier = Modifier.glassCard(24.dp, AppSurface()),
+                containerColor = if (LocalIsLiquidGlass.current) androidx.compose.ui.graphics.Color.Transparent else AppSurface(),
                 title = { Text(AppStr.manageWallet, fontWeight = FontWeight.Bold) },
                 text = {
                     Column(modifier = Modifier.fillMaxWidth()) {
@@ -676,6 +680,8 @@ fun SettingsScreen(
                     showCategoryDialog = false
                     onForceUpdate()
                 },
+                modifier = Modifier.glassCard(24.dp, AppSurface()),
+                containerColor = if (LocalIsLiquidGlass.current) androidx.compose.ui.graphics.Color.Transparent else AppSurface(),
                 title = { Text(AppStr.manageCat, fontWeight = FontWeight.Bold) },
                 text = {
                     Column(modifier = Modifier.fillMaxWidth()) {
@@ -877,6 +883,8 @@ fun SettingsScreen(
         if (showEditProfileDialog) {
             AlertDialog(
                 onDismissRequest = { showEditProfileDialog = false },
+                modifier = Modifier.glassCard(24.dp, AppSurface()),
+                containerColor = if (LocalIsLiquidGlass.current) androidx.compose.ui.graphics.Color.Transparent else AppSurface(),
                 title = { Text(AppStr.editProf, fontWeight = FontWeight.Bold) },
                 text = {
                     OutlinedTextField(
@@ -905,6 +913,8 @@ fun SettingsScreen(
         if (showCurrencyDialog) {
             AlertDialog(
                 onDismissRequest = { showCurrencyDialog = false },
+                modifier = Modifier.glassCard(24.dp, AppSurface()),
+                containerColor = if (LocalIsLiquidGlass.current) androidx.compose.ui.graphics.Color.Transparent else AppSurface(),
                 title = { Text(AppStr.selCur) },
                 text = {
                     val currencies = listOf(
@@ -945,6 +955,8 @@ fun SettingsScreen(
         if (showTargetDialog) {
             AlertDialog(
                 onDismissRequest = { showTargetDialog = false },
+                modifier = Modifier.glassCard(24.dp, AppSurface()),
+                containerColor = if (LocalIsLiquidGlass.current) androidx.compose.ui.graphics.Color.Transparent else AppSurface(),
                 title = { Text(AppStr.setTar) },
                 text = {
                     OutlinedTextField(
@@ -974,6 +986,8 @@ fun SettingsScreen(
         if (showThemeDialog) {
             AlertDialog(
                 onDismissRequest = { showThemeDialog = false },
+                modifier = Modifier.glassCard(24.dp, AppSurface()),
+                containerColor = if (LocalIsLiquidGlass.current) androidx.compose.ui.graphics.Color.Transparent else AppSurface(),
                 title = { Text(AppStr.theme) },
                 text = {
                     Column {
@@ -1107,6 +1121,8 @@ fun SettingsScreen(
         if (showPinDialog) {
             AlertDialog(
                 onDismissRequest = { showPinDialog = false; pinInput = "" },
+                modifier = Modifier.glassCard(24.dp, AppSurface()),
+                containerColor = if (LocalIsLiquidGlass.current) androidx.compose.ui.graphics.Color.Transparent else AppSurface(),
                 title = { Text(if(isTurningOn) AppStr.setPin else AppStr.confPin) },
                 text = {
                     OutlinedTextField(
@@ -1153,17 +1169,21 @@ fun SettingsScreen(
         if (showVersionDialog) {
             AlertDialog(
                 onDismissRequest = { showVersionDialog = false },
+                modifier = Modifier.glassCard(24.dp, AppSurface()),
+                containerColor = if (LocalIsLiquidGlass.current) androidx.compose.ui.graphics.Color.Transparent else AppSurface(),
                 title = { Text(AppStr.info, fontWeight = FontWeight.Bold) },
                 text = { Text(AppStr.versionInfo) },
                 confirmButton = { TextButton(onClick = { showVersionDialog = false }) { Text(AppStr.close) } },
-                shape = RoundedCornerShape(24.dp),
-                containerColor = AppBg()
+                
+                
             )
         }
 
         if (showPrivacyDialog) {
             AlertDialog(
                 onDismissRequest = { showPrivacyDialog = false },
+                modifier = Modifier.glassCard(24.dp, AppSurface()),
+                containerColor = if (LocalIsLiquidGlass.current) androidx.compose.ui.graphics.Color.Transparent else AppSurface(),
                 title = { Text(AppStr.priv, fontWeight = FontWeight.Bold) },
                 text = {
                     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
@@ -1171,14 +1191,16 @@ fun SettingsScreen(
                     }
                 },
                 confirmButton = { TextButton(onClick = { showPrivacyDialog = false }) { Text(AppStr.gotIt) } },
-                shape = RoundedCornerShape(24.dp),
-                containerColor = AppBg()
+                
+                
             )
         }
 
         if (showTermsDialog) {
             AlertDialog(
                 onDismissRequest = { showTermsDialog = false },
+                modifier = Modifier.glassCard(24.dp, AppSurface()),
+                containerColor = if (LocalIsLiquidGlass.current) androidx.compose.ui.graphics.Color.Transparent else AppSurface(),
                 title = { Text(AppStr.trms, fontWeight = FontWeight.Bold) },
                 text = {
                     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
@@ -1186,8 +1208,8 @@ fun SettingsScreen(
                     }
                 },
                 confirmButton = { TextButton(onClick = { showTermsDialog = false }) { Text(AppStr.agree) } },
-                shape = RoundedCornerShape(24.dp),
-                containerColor = AppBg()
+                
+                
             )
         }
 

@@ -87,7 +87,8 @@
         <activity-alias
             android:name=".MainActivityAliasPrideGlass"
             android:targetActivity=".MainActivity"
-            android:icon="@drawable/kumaprideglass"
+            android:icon="@mipmap/ic_launcher_kumaprideglass1"
+            android:roundIcon="@mipmap/ic_launcher_kumaprideglass1_round"
             android:enabled="false"
             android:exported="true">
             <intent-filter>
@@ -100,7 +101,24 @@
         <activity-alias
             android:name=".MainActivityAliasBearGlass"
             android:targetActivity=".MainActivity"
-            android:icon="@drawable/kumabearglass"
+            android:icon="@mipmap/ic_launcher_kumabearglass1"
+            android:roundIcon="@mipmap/ic_launcher_kumabearglass1_round"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+
+
+        <!-- PINTU 6: LOGO KUMA GLASS (Default Mati) -->
+        <activity-alias
+            android:name=".MainActivityAliasKumaGlass"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher_kumaglass"
+            android:roundIcon="@mipmap/ic_launcher_kumaglass_round"
             android:enabled="false"
             android:exported="true">
             <intent-filter>

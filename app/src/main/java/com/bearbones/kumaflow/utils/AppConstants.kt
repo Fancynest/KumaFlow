@@ -138,7 +138,7 @@ object AppStr {
 
     fun txDeleted(count: Int) = if(isId) "$count transaksi dihapus" else "$count transactions deleted"
     fun txChangedTo(count: Int, cat: String) = if(isId) "$count transaksi diubah ke $cat" else "$count transactions changed to $cat"
-    val versionInfo get() = if(isId) "Versi: $VERSION\nBuild: Beta\nTipe: Standalone Local" else "Version: $VERSION\nBuild: Edit Category Icon\nType: Standalone Local"
+    val versionInfo get() = if(isId) "Versi: $VERSION\nBuild: Beta\nTipe: Standalone Local" else "Version: $VERSION\nBuild: Kuma Glass\nType: Standalone Local"
 }
 
 // ... [KumaIconLibrary] ...

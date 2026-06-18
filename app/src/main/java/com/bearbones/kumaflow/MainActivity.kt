@@ -53,6 +53,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
@@ -63,6 +67,8 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -189,9 +195,9 @@ fun Modifier.glassCard(
     val glassColor = if (forceColor) {
         fallbackColor
     } else if (LocalIsDark.current) {
-        if (fallbackColor.luminance() > 0.5f) Color.Black.copy(alpha = 0.2f) else fallbackColor.copy(alpha = 0.25f)
+        Color(0xFF2C2C2E).copy(alpha = 0.5f)
     } else {
-        if (fallbackColor.luminance() < 0.5f) Color.White.copy(alpha = 0.15f) else fallbackColor.copy(alpha = 0.15f)
+        Color.White.copy(alpha = 0.6f)
     }
 
     val shineGradient = remember {
@@ -218,10 +224,14 @@ fun Modifier.glassCard(
             Modifier.hazeChild(
                 state = LocalHazeState.current,
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(radius),
-                style = HazeStyle(blurRadius = 16.dp, backgroundColor = Color.Transparent, tint = dev.chrisbanes.haze.HazeTint(glassColor))
+                style = HazeStyle(blurRadius = 64.dp, backgroundColor = Color.Transparent, tint = dev.chrisbanes.haze.HazeTint(glassColor))
             )
         } else {
-            Modifier.background(glassColor)
+            Modifier.hazeChild(
+                state = LocalHazeState.current,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(radius),
+                style = HazeStyle(blurRadius = 16.dp, backgroundColor = Color.Transparent, tint = dev.chrisbanes.haze.HazeTint(glassColor))
+            )
         }
 
         this.clip(androidx.compose.foundation.shape.RoundedCornerShape(radius))
@@ -277,7 +287,9 @@ fun showBiometricPrompt(activity: FragmentActivity, onSuccess: () -> Unit, onErr
 fun MainScreen(
     userProfileState: UserProfile?,
     dao: TransactionDao,
-    onOpenWrapped: (Int, Int) -> Unit = { _, _ -> }
+    onOpenWrapped: (Int, Int) -> Unit = { _, _ -> },
+    homeListState: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
+    onOverlayStateChange: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -294,7 +306,6 @@ fun MainScreen(
     var selectedYear by remember { mutableIntStateOf(java.time.LocalDateTime.now().year) }
     var forceUpdateTrigger by remember { mutableIntStateOf(0) }
 
-    val homeListState = androidx.compose.foundation.lazy.rememberLazyListState()
 
     // ðŸ”¥ STATE SELECTION HOISTING ðŸ”¥
     var selectedTxs by remember { mutableStateOf(setOf<Int>()) }
@@ -351,15 +362,12 @@ fun MainScreen(
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showBottomSheet by remember { mutableStateOf(false) }
+    LaunchedEffect(showBottomSheet) { onOverlayStateChange(showBottomSheet) }
     var transactionToEdit by remember { mutableStateOf<TransactionWithSplits?>(null) }
     var showBackupReminder by remember { mutableStateOf(false) }
     val totalTxCount = transactionListWithSplits.size
 
-    val hazeState = remember { HazeState() }
-    CompositionLocalProvider(LocalHazeState provides hazeState) {
-        Box(modifier = Modifier.fillMaxSize().background(AppBg())) {
-            BokehBackground()
-            Scaffold(
+    Scaffold(
                 containerColor = Color.Transparent,
         floatingActionButton = {
             val showFab = selectedItemIndex != 2 && (selectedItemIndex != 0 || isFabVisible) && !isSelectionMode
@@ -374,7 +382,7 @@ fun MainScreen(
                 ) { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(40.dp)) }
             }
         },
-        bottomBar = { CustomBottomNav(selectedItemIndex, haptic) { selectedItemIndex = it } }
+        bottomBar = { CustomBottomNav(pagerState, haptic) { scope.launch { pagerState.animateScrollToPage(it) }; selectedItemIndex = it } }
     ) { paddingValues ->
         Box(modifier = Modifier.padding(
             top = paddingValues.calculateTopPadding(),
@@ -441,21 +449,63 @@ fun MainScreen(
             }
         }
 
-        if (showBottomSheet) {
-            ModalBottomSheet(onDismissRequest = { showBottomSheet = false }, sheetState = sheetState, containerColor = AppBg()) {
-                TransactionBottomSheet(
-                    profile = userProfile, transactionToEdit = transactionToEdit, onDismiss = { showBottomSheet = false },
-                    onSave = { txList ->
-                        scope.launch {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            txList.forEach { (newTrans, splits) -> if (newTrans.id == 0) dao.insertFullTransaction(newTrans, splits) else dao.updateFullTransaction(newTrans, splits) }
-                            if ((totalTxCount + txList.size) % 10 == 0) showBackupReminder = true
-                            forceUpdateTrigger++; updateKumaWidget(context)
-                            Toast.makeText(context, AppStr.txSaved, Toast.LENGTH_SHORT).show()
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showBottomSheet,
+            enter = androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.fadeOut()
+        ) {
+            var offsetY by remember { mutableFloatStateOf(0f) }
+            val animatedOffsetY by androidx.compose.animation.core.animateFloatAsState(targetValue = offsetY)
+            LaunchedEffect(showBottomSheet) { if (showBottomSheet) offsetY = 0f }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.4f))
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null
+                    ) { showBottomSheet = false },
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Box(
+                    modifier = Modifier
+                        .animateEnterExit(
+                            enter = androidx.compose.animation.slideInVertically(initialOffsetY = { it }),
+                            exit = androidx.compose.animation.slideOutVertically(targetOffsetY = { it })
+                        )
+                        .offset { androidx.compose.ui.unit.IntOffset(0, animatedOffsetY.toInt()) }
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) { /* Prevent click through */ }
+                        .pointerInput(Unit) {
+                            detectVerticalDragGestures(
+                                onDragEnd = {
+                                    if (offsetY > 300f) showBottomSheet = false else offsetY = 0f
+                                },
+                                onDragCancel = { offsetY = 0f }
+                            ) { change: androidx.compose.ui.input.pointer.PointerInputChange, dragAmount: Float ->
+                                change.consume()
+                                if (offsetY + dragAmount > 0f) offsetY += dragAmount
+                            }
                         }
-                    },
-                    onUpdateProfile = { updatedProfile -> scope.launch { dao.saveProfile(updatedProfile); forceUpdateTrigger++; updateKumaWidget(context) } }
-                )
+                        .glassCard(32.dp, AppBg(), useHaze = true)
+                ) {
+                    TransactionBottomSheet(
+                        profile = userProfile, transactionToEdit = transactionToEdit, onDismiss = { showBottomSheet = false },
+                        onSave = { txList ->
+                            scope.launch {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                txList.forEach { (newTrans, splits) -> if (newTrans.id == 0) dao.insertFullTransaction(newTrans, splits) else dao.updateFullTransaction(newTrans, splits) }
+                                if ((totalTxCount + txList.size) % 10 == 0) showBackupReminder = true
+                                forceUpdateTrigger++; updateKumaWidget(context)
+                                Toast.makeText(context, AppStr.txSaved, Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onUpdateProfile = { updatedProfile -> scope.launch { dao.saveProfile(updatedProfile); forceUpdateTrigger++; updateKumaWidget(context) } }
+                    )
+                }
             }
         }
 
@@ -475,8 +525,6 @@ fun MainScreen(
             )
         }
     }
-    }
-}
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -1485,69 +1533,90 @@ fun SettingsGroupCard(
 }
 
 @Composable
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 fun CustomBottomNav(
-    selectedIndex: Int,
+    pagerState: androidx.compose.foundation.pager.PagerState,
     haptic: androidx.compose.ui.hapticfeedback.HapticFeedback,
     onItemSelected: (Int) -> Unit
 ) {
-    Box(
+    val items = listOf(
+        Pair(Icons.Rounded.Home, AppStr.home),
+        Pair(Icons.Rounded.Equalizer, AppStr.rep),
+        Pair(Icons.Rounded.Settings, AppStr.set)
+    )
+
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 24.dp, end = 24.dp, bottom = 24.dp)
             .height(75.dp)
             .glassCard(32.dp, AppSurface(), useHaze = true)
             .border(1.dp, AppText().copy(alpha = 0.1f), RoundedCornerShape(32.dp))
+            .pointerInput(Unit) {
+                detectDragGestures { change, _ ->
+                    change.consume()
+                    val segmentWidth = size.width / 3f
+                    val targetIndex = (change.position.x / segmentWidth).toInt().coerceIn(0, 2)
+                    if (targetIndex != pagerState.currentPage) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onItemSelected(targetIndex)
+                    }
+                }
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { offset ->
+                    val segmentWidth = size.width / 3f
+                    val targetIndex = (offset.x / segmentWidth).toInt().coerceIn(0, 2)
+                    if (targetIndex != pagerState.currentPage) {
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onItemSelected(targetIndex)
+                    }
+                })
+            }
     ) {
+        val segmentWidth = maxWidth / 3
+        val exactPosition = (pagerState.currentPage + pagerState.currentPageOffsetFraction).coerceIn(0f, 2f)
+        val indicatorOffset = segmentWidth * exactPosition
+
+        // Sliding Pill Frame
+        Box(
+            modifier = Modifier
+                .offset(x = indicatorOffset)
+                .width(segmentWidth)
+                .fillMaxHeight()
+                .padding(6.dp)
+                .clip(RoundedCornerShape(32.dp))
+                .background(if (LocalIsDark.current) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f))
+                .border(1.dp, if (LocalIsDark.current) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.03f), RoundedCornerShape(32.dp))
+        )
+
         Row(
             modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            NavItem(Icons.Rounded.Home, AppStr.home, selectedIndex == 0) {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onItemSelected(0)
-            }
-            NavItem(Icons.Rounded.Equalizer, AppStr.rep, selectedIndex == 1) {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onItemSelected(1)
-            }
-            NavItem(Icons.Rounded.Settings, AppStr.set, selectedIndex == 2) {
-                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                onItemSelected(2)
+            items.forEachIndexed { index, pair ->
+                val isSelected = pagerState.currentPage == index
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.weight(1f).padding(vertical = 4.dp)
+                ) {
+                    Icon(
+                        pair.first,
+                        null,
+                        tint = if (isSelected) AppText() else AppText().copy(alpha = 0.5f),
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Text(
+                        pair.second,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSelected) AppText() else AppText().copy(alpha = 0.5f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
-    }
-}
-
-@Composable
-fun NavItem(
-    icon: ImageVector,
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .clickable { onClick() }
-            .padding(vertical = 8.dp, horizontal = 12.dp)
-            .widthIn(max = 80.dp)
-    ) {
-        Icon(
-            icon,
-            null,
-            tint = if (isSelected) AppText() else AppText().copy(alpha = 0.5f),
-            modifier = Modifier.size(32.dp)
-        )
-        Text(
-            label,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (isSelected) AppText() else AppText().copy(alpha = 0.5f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 
@@ -1670,6 +1739,7 @@ fun TransactionItem(
     }
 
     val dismissState = rememberSwipeToDismissBoxState(
+        positionalThreshold = { it * 0.5f },
         confirmValueChange = { value ->
             if (isSelectionMode) return@rememberSwipeToDismissBoxState false
             when (value) {
@@ -1824,7 +1894,7 @@ fun updateKumaWidget(context: Context) {
     } catch (_: Exception) {}
 }
 
-fun checkAndApplyPrideEasterEgg(context: android.content.Context, userName: String?) {
+fun checkAndApplyPrideEasterEgg(context: android.content.Context, userProfile: com.bearbones.kumaflow.UserProfile?) {
     val pm = context.packageManager
     val pkg = context.packageName
 
@@ -1833,9 +1903,10 @@ fun checkAndApplyPrideEasterEgg(context: android.content.Context, userName: Stri
     val bearIcon = android.content.ComponentName(context, "$pkg.MainActivityAliasBear")
     val prideGlassIcon = android.content.ComponentName(context, "$pkg.MainActivityAliasPrideGlass")
     val bearGlassIcon = android.content.ComponentName(context, "$pkg.MainActivityAliasBearGlass")
+    val kumaGlassIcon = android.content.ComponentName(context, "$pkg.MainActivityAliasKumaGlass")
 
     fun setIcon(targetIcon: android.content.ComponentName) {
-        val allIcons = listOf(normalIcon, prideIcon, bearIcon, prideGlassIcon, bearGlassIcon)
+        val allIcons = listOf(normalIcon, prideIcon, bearIcon, prideGlassIcon, bearGlassIcon, kumaGlassIcon)
         for (icon in allIcons) {
             val state = if (icon == targetIcon) {
                 android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
@@ -1853,14 +1924,18 @@ fun checkAndApplyPrideEasterEgg(context: android.content.Context, userName: Stri
         }
     }
 
-    if (userName.isNullOrEmpty()) {
+    if (userProfile == null || userProfile.userName.isEmpty()) {
         setIcon(normalIcon)
         return
     }
 
+    val isGlass = userProfile.isLiquidGlass
+    val userName = userProfile.userName
+
     when {
-        userName.contains("🌈") || userName.contains("#pride", ignoreCase = true) -> setIcon(prideIcon)
-        userName.contains("🐻") || userName.contains("#bear", ignoreCase = true) -> setIcon(bearIcon)
+        userName.contains("🌈") || userName.contains("#pride", ignoreCase = true) -> setIcon(if (isGlass) prideGlassIcon else prideIcon)
+        userName.contains("🐻") || userName.contains("#bear", ignoreCase = true) -> setIcon(if (isGlass) bearGlassIcon else bearIcon)
+        isGlass -> setIcon(kumaGlassIcon)
         else -> setIcon(normalIcon)
     }
 }

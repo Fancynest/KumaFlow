@@ -175,6 +175,7 @@ fun HomeScreen(
 
     val isSelectionMode = selectedTxs.isNotEmpty()
     var showBulkCatDialog by remember { mutableStateOf(false) }
+    var expandedDates by rememberSaveable { mutableStateOf(setOf<String>()) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -353,7 +354,10 @@ fun HomeScreen(
                                 .glassCard(24.dp, AppSurfaceVariant())
                                 .padding(vertical = 8.dp)
                         ) {
-                            txs.forEachIndexed { index, item ->
+                            val isExpanded = expandedDates.contains(date)
+                            val displayTxs = if (isExpanded || txs.size <= 1) txs else txs.take(1)
+
+                            displayTxs.forEachIndexed { index, item ->
                                 val isSelected = selectedTxs.contains(item.transaction.id)
                                 TransactionItem(
                                     profile = profile,
@@ -365,8 +369,26 @@ fun HomeScreen(
                                     onEdit = onEdit,
                                     onDelete = onDelete
                                 )
-                                if (index < txs.size - 1) {
+                                if (index < displayTxs.size - 1) {
                                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = AppText().copy(alpha = 0.1f))
+                                }
+                            }
+                            
+                            if (!isExpanded && txs.size > 1) {
+                                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = AppText().copy(alpha = 0.1f))
+                                TextButton(
+                                    onClick = { expandedDates = expandedDates + date },
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                                ) {
+                                    Text("${txs.size - 1} More", color = AppPrimary(), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            } else if (isExpanded && txs.size > 1) {
+                                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = AppText().copy(alpha = 0.1f))
+                                TextButton(
+                                    onClick = { expandedDates = expandedDates - date },
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                                ) {
+                                    Text("Show Less", color = AppPrimary(), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                 }
                             }
                         }

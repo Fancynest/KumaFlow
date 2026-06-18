@@ -108,6 +108,7 @@ import java.util.Locale
 import kotlin.math.abs
 import androidx.compose.ui.draw.blur
 import androidx.compose.animation.core.animateDpAsState
+import dev.chrisbanes.haze.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
@@ -171,8 +172,7 @@ fun LockScreen(correctPin: String, activity: FragmentActivity, onSuccess: () -> 
                     Box(
                         modifier = Modifier
                             .size(70.dp)
-                            .clip(CircleShape)
-                            .background(AppSurface())
+                            .glassCard(35.dp, AppSurface(), useHaze = true)
                             .clickable {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 when (label) {
@@ -285,7 +285,7 @@ class MainActivity : FragmentActivity() {
             var wrappedTarget by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
             LaunchedEffect(userProfile?.userName, userProfile?.isLiquidGlass) {
-                checkAndApplyPrideEasterEgg(context, userProfile?.userName)
+                checkAndApplyPrideEasterEgg(context, userProfile)
             }
 
             var isAuthenticated by rememberSaveable { mutableStateOf(false) }
@@ -308,11 +308,13 @@ class MainActivity : FragmentActivity() {
                 else -> systemDark
             }
 
+            val hazeState = remember { dev.chrisbanes.haze.HazeState() }
             CompositionLocalProvider(
                 LocalIsDark provides isDark,
                 LocalIsAmoled provides isAmoled,
                 LocalIsLiquidGlass provides (userProfile?.isLiquidGlass == true),
-                LocalIsPremiumGlassBlur provides (userProfile?.isPremiumGlassBlur == true)
+                LocalIsPremiumGlassBlur provides (userProfile?.isPremiumGlassBlur == true),
+                LocalHazeState provides hazeState
             ) {
                 val colorScheme = when {
                     // 1. Easter Egg Pride & Bear
@@ -343,18 +345,38 @@ class MainActivity : FragmentActivity() {
                 }
 
                 MaterialTheme(colorScheme = colorScheme) {
-                    if (userProfile?.isAppLocked == true && !isAuthenticated) {
-                        LockScreen(userProfile?.appPin ?: "", this@MainActivity) {
-                            isAuthenticated = true
+                    val homeListState = androidx.compose.foundation.lazy.rememberLazyListState()
+                    var isOverlayOpen by remember { mutableStateOf(false) }
+                    val isWrappedOpen = wrappedTarget != null
+                    val isAppLocked = userProfile?.isAppLocked == true && !isAuthenticated
+                    
+                    val isPaused = isOverlayOpen || isWrappedOpen || isAppLocked
+                    val scrollOffsetProvider = remember(homeListState) { { homeListState.firstVisibleItemScrollOffset.toFloat() } }
+
+                    Box(modifier = Modifier.fillMaxSize().background(AppBg())) {
+                        Box(modifier = Modifier.fillMaxSize().let { if (LocalIsLiquidGlass.current) it.haze(state = LocalHazeState.current) else it }) {
+                            if (LocalIsLiquidGlass.current) {
+                                com.bearbones.kumaflow.ui.components.BokehBackground(
+                                    isPaused = isPaused,
+                                    scrollOffsetProvider = scrollOffsetProvider
+                                )
+                            }
                         }
-                    } else {
-                        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                            Box(modifier = Modifier.fillMaxSize()) {
+
+                        if (isAppLocked) {
+                            LockScreen(userProfile?.appPin ?: "", this@MainActivity) {
+                                isAuthenticated = true
+                            }
+                        } else {
+                            Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
+                                Box(modifier = Modifier.fillMaxSize()) {
 
                                 MainScreen(
                                     userProfileState = userProfile,
                                     dao = dao,
-                                    onOpenWrapped = { m, y -> wrappedTarget = Pair(m, y) }
+                                    onOpenWrapped = { m, y -> wrappedTarget = Pair(m, y) },
+                                    homeListState = homeListState,
+                                    onOverlayStateChange = { isOverlayOpen = it }
                                 )
 
                                 NewUserAnnouncementDialog()
@@ -396,6 +418,7 @@ class MainActivity : FragmentActivity() {
                                             }
                                         }
                                     )
+                                }
                                 }
                             }
                         }
