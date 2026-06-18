@@ -61,6 +61,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -178,10 +179,19 @@ fun Modifier.glassmorphic(
 @Composable
 fun Modifier.glassCard(
     radius: androidx.compose.ui.unit.Dp = 16.dp,
-    fallbackColor: Color
+    fallbackColor: Color,
+    useHaze: Boolean = true
 ): Modifier {
     return if (LocalIsLiquidGlass.current) {
-        this.glassmorphic(radius)
+        val glassColor = if (LocalIsDark.current) {
+            if (fallbackColor.luminance() > 0.5f) Color.Black.copy(alpha = 0.2f) else fallbackColor.copy(alpha = 0.3f)
+        } else {
+            if (fallbackColor.luminance() < 0.5f) Color.White.copy(alpha = 0.2f) else fallbackColor.copy(alpha = 0.3f)
+        }
+        this.clip(androidx.compose.foundation.shape.RoundedCornerShape(radius))
+            .let { if (useHaze) it.hazeChild(state = LocalHazeState.current) else it }
+            .background(glassColor)
+            .border(1.dp, Color.White.copy(alpha = 0.2f), androidx.compose.foundation.shape.RoundedCornerShape(radius))
     } else {
         this.clip(androidx.compose.foundation.shape.RoundedCornerShape(radius)).background(fallbackColor)
     }
@@ -524,7 +534,7 @@ fun TransactionBottomSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)
-                .glassCard(16.dp, AppSurfaceVariant())
+                .glassCard(16.dp, AppSurfaceVariant(), useHaze = false)
         ) {
             Box(
                 modifier = Modifier
@@ -964,7 +974,7 @@ fun TransactionBottomSheet(
 
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(5),
-                        modifier = Modifier.height(150.dp).glassCard(8.dp, AppSurfaceVariant())
+                        modifier = Modifier.height(150.dp).glassCard(8.dp, AppSurfaceVariant(), useHaze = false)
                     ) {
                         items(kumaIconLibrary.keys.toList()) { key ->
                             val icon = kumaIconLibrary[key]!!
@@ -1031,7 +1041,7 @@ fun MonthYearSelector(currentMonth: Int, currentYear: Int, onMonthChange: (Int, 
         horizontalArrangement = Arrangement.Center,
         modifier = Modifier
             .fillMaxWidth()
-            .glassCard(20.dp, AppSurfaceVariant())
+            .glassCard(20.dp, AppSurfaceVariant(), useHaze = false)
             .padding(vertical = 6.dp)
     ) {
         IconButton(

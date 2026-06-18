@@ -666,7 +666,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(40.dp)
-                                .glassCard(12.dp, AppSurfaceVariant())
+                                .glassCard(12.dp, AppSurfaceVariant(), useHaze = false)
                         ) {
                             Box(
                                 modifier = Modifier
@@ -778,7 +778,7 @@ fun SettingsScreen(
 
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(5),
-                                modifier = Modifier.height(120.dp).glassCard(8.dp, AppSurfaceVariant())
+                                modifier = Modifier.height(120.dp).glassCard(8.dp, AppSurfaceVariant(), useHaze = false)
                             ) {
                                 items(kumaIconLibrary.keys.toList()) { key ->
                                     val icon = kumaIconLibrary[key]!!
