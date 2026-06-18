@@ -70,4 +70,5 @@ dependencies {
 
     implementation("com.airbnb.android:lottie-compose:6.4.0")
     implementation("dev.chrisbanes.haze:haze:1.1.1")
+    implementation("dev.chrisbanes.haze:haze-materials:1.1.1")
 }
