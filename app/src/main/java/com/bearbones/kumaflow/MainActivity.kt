@@ -744,9 +744,9 @@ fun TransactionBottomSheet(
 
         val curSym = when(profile.currency) {
             "USD", "AUD", "CAD", "SGD" -> "$"
-            "EUR" -> "â‚¬"
-            "GBP" -> "Â£"
-            "JPY", "CNY" -> "Â¥"
+            "EUR" -> "€"
+            "GBP" -> "£"
+            "JPY", "CNY" -> "¥"
             "CHF" -> "CHF"
             else -> "Rp"
         }
@@ -1188,7 +1188,7 @@ fun generatePDF(context: Context, data: List<KumaTransaction>, profile: UserProf
     val paint = Paint()
     val titlePaint = Paint().apply { isFakeBoldText = true; textSize = 18f; color = android.graphics.Color.BLACK }
     val headerPaint = Paint().apply { isFakeBoldText = true; textSize = 12f; color = android.graphics.Color.DKGRAY }
-    val curSym = when(profile.currency) { "USD", "AUD", "CAD", "SGD" -> "$"; "EUR" -> "â‚¬"; "GBP" -> "Â£"; "JPY", "CNY" -> "Â¥"; "CHF" -> "CHF"; else -> "Rp" }
+    val curSym = when(profile.currency) { "USD", "AUD", "CAD", "SGD" -> "$"; "EUR" -> "€"; "GBP" -> "£"; "JPY", "CNY" -> "¥"; "CHF" -> "CHF"; else -> "Rp" }
 
     drawHeaders(page.canvas, paint, pageNum, profile, titlePaint, headerPaint, periodStr)
     var yPos = 145f
@@ -1564,9 +1564,9 @@ fun TransactionItem(
 
     val curSym = when(profile.currency) {
         "USD", "AUD", "CAD", "SGD" -> "$"
-        "EUR" -> "â‚¬"
-        "GBP" -> "Â£"
-        "JPY", "CNY" -> "Â¥"
+        "EUR" -> "€"
+        "GBP" -> "£"
+        "JPY", "CNY" -> "¥"
         "CHF" -> "CHF"
         else -> "Rp"
     }
@@ -1727,7 +1727,7 @@ fun TransactionItem(
                         Text(trans.message, color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp, bottom = 2.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
 
-                    Text("${trans.wallet} â€¢ ${trans.category}", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${trans.wallet} • ${trans.category}", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
 
                 val formatted = try {

@@ -1,4 +1,4 @@
-﻿@file:Suppress("SpellCheckingInspection", "UNUSED_PARAMETER", "unused", "CanBeVal", "DEPRECATION", "ScheduleExactAlarm")
+@file:Suppress("SpellCheckingInspection", "UNUSED_PARAMETER", "unused", "CanBeVal", "DEPRECATION", "ScheduleExactAlarm")
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.bearbones.kumaflow
@@ -130,7 +130,7 @@ fun ReportScreen(
     onOpenWrapped: (Int, Int) -> Unit = { _, _ -> }
 ) {
     val locale = Locale.forLanguageTag("id-ID")
-    val curSym = when(profile.currency) { "USD", "AUD", "CAD", "SGD" -> "$"; "EUR" -> "â‚¬"; "GBP" -> "Â£"; "JPY", "CNY" -> "Â¥"; "CHF" -> "CHF"; else -> "Rp" }
+    val curSym = when(profile.currency) { "USD", "AUD", "CAD", "SGD" -> "$"; "EUR" -> "€"; "GBP" -> "£"; "JPY", "CNY" -> "¥"; "CHF" -> "CHF"; else -> "Rp" }
 
     fun getCatColor(catName: String): Color {
         val predefined = mapOf("Financial" to Color(0xFF623802), "Food" to Color(0xFFD5641C), "Shopping" to Color(0xFFFEDD60), "Health" to Color(0xFFFEE6B1), "Transport" to Color(0xFFFFFFFF), "Education" to Color(0xFF929292), "Entertainment" to Color(0xFF000000), "Others" to Color(0xFF006064))
@@ -158,7 +158,7 @@ fun ReportScreen(
         ) {
             Icon(Icons.Default.AutoAwesome, contentDescription = "Rewatch", tint = AppPrimary())
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Putar Ulang Wrapped $currentSelectedMonthName $selectedYear âœ¨", color = AppPrimary(), fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+            Text("Putar Ulang Wrapped $currentSelectedMonthName $selectedYear ✨", color = AppPrimary(), fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
         }
 
         Spacer(modifier = Modifier.height(24.dp))

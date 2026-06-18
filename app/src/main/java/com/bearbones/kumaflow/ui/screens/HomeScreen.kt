@@ -141,7 +141,7 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val locale = java.util.Locale.forLanguageTag("id-ID")
-    val curSym = when(profile.currency) { "USD", "AUD", "CAD", "SGD" -> "$"; "EUR" -> "â‚¬"; "GBP" -> "Â£"; "JPY", "CNY" -> "Â¥"; "CHF" -> "CHF"; else -> "Rp" }
+    val curSym = when(profile.currency) { "USD", "AUD", "CAD", "SGD" -> "$"; "EUR" -> "€"; "GBP" -> "£"; "JPY", "CNY" -> "¥"; "CHF" -> "CHF"; else -> "Rp" }
 
     val haptic = LocalHapticFeedback.current
 
@@ -184,7 +184,7 @@ fun HomeScreen(
                             Box(modifier = Modifier.fillMaxWidth().background(bannerGradient).padding(20.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text("KumaFlow Wrapped âœ¨", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                                        Text("KumaFlow Wrapped ✨", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                                         Spacer(modifier = Modifier.height(4.dp))
                                         val monthName = cal.getDisplayName(java.util.Calendar.MONTH, java.util.Calendar.LONG, locale) ?: "Bulan Lalu"
                                         Text("Rapor keuanganmu di bulan $monthName udah siap! Yuk intip pengeluaranmu.", color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, lineHeight = 16.sp)
@@ -360,7 +360,7 @@ fun HomeScreen(
         // ðŸ”¥ BULK ACTION OVERLAY BAR ðŸ”¥
         androidx.compose.animation.AnimatedVisibility(
             visible = isSelectionMode,
-            modifier = Modifier.align(Alignment.BottomCenter),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = paddingValues.calculateBottomPadding() + 8.dp),
             enter = androidx.compose.animation.slideInVertically(initialOffsetY = { it }),
             exit = androidx.compose.animation.slideOutVertically(targetOffsetY = { it })
         ) {

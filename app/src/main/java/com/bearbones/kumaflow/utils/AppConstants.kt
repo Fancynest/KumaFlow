@@ -1,4 +1,4 @@
-﻿package com.bearbones.kumaflow
+package com.bearbones.kumaflow
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -128,7 +128,7 @@ object AppStr {
     val backupNow get() = if(isId) "Backup Sekarang" else "Backup Now"
     val later get() = if(isId) "Nanti Aja" else "Later"
     val optDb get() = if(isId) "Optimasi Database" else "Optimize Database"
-    val optSuccess get() = if(isId) "Storage berhasil dioptimasi! ðŸ§¹" else "Storage optimized! ðŸ§¹"
+    val optSuccess get() = if(isId) "Storage berhasil dioptimasi! 🧹" else "Storage optimized! 🧹"
     val optFail get() = if(isId) "Gagal optimasi: " else "Optimization failed: "
     val cancelBulk get() = if(isId) "Batal Massal" else "Cancel Selection"
     val changeCat get() = if(isId) "Ubah Kategori" else "Change Category"

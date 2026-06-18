@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Base Background -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#D91E1E1E" />
+            <corners android:radius="24dp" />
+            <stroke android:width="1dp" android:color="#26FFFFFF" />
+        </shape>
+    </item>
+
+    <!-- Top Left Title -->
+    <item android:top="24dp" android:left="24dp" android:right="120dp" android:bottom="80dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#4DFFFFFF" />
+            <corners android:radius="4dp" />
+        </shape>
+    </item>
+    
+    <!-- Big Balance -->
+    <item android:top="40dp" android:left="24dp" android:right="80dp" android:bottom="64dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#FFFFFF" />
+            <corners android:radius="4dp" />
+        </shape>
+    </item>
+
+    <!-- Wallet 1 -->
+    <item android:top="80dp" android:left="24dp" android:right="180dp" android:bottom="20dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#1AFFFFFF" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+
+    <!-- Wallet 2 -->
+    <item android:top="80dp" android:left="90dp" android:right="100dp" android:bottom="20dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#1AFFFFFF" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+
+    <!-- Wallet 3 -->
+    <item android:top="80dp" android:left="160dp" android:right="24dp" android:bottom="20dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#1AFFFFFF" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+</layer-list>
