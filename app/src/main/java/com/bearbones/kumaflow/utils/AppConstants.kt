@@ -34,7 +34,7 @@ object AppStr {
     val tar get() = "Target Global"
     val catBudget get() = if(isId) "Budget Kategori" else "Category Budget"
 
-    const val VERSION = "v4.6.6"
+    const val VERSION = "v5.0.0"
     val dat get() = "Data"
     val expPdf get() = if(isId) "Ekspor ke PDF" else "Export to PDF"
     val expCsv get() = if(isId) "Ekspor ke CSV" else "Export to CSV"
@@ -143,7 +143,7 @@ object AppStr {
 
 // ... [KumaIconLibrary] ...
 val kumaIconLibrary = mapOf(
-    "Kategori" to Icons.Default.Category,
+    "Kategori" to Icons.Default.DashboardCustomize,
     "Lainnya" to Icons.Default.MoreHoriz,
     "Bintang" to Icons.Default.Star,
     "Favorit" to Icons.Default.Favorite,

@@ -58,6 +58,8 @@ import androidx.compose.ui.Modifier
 import com.bearbones.kumaflow.glassCard
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import org.burnoutcrew.reorderable.*
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
@@ -147,6 +149,13 @@ fun HomeScreen(
 
     var isPrivacyMode by rememberSaveable { mutableStateOf(false) }
     val blurRadius by androidx.compose.animation.core.animateDpAsState(targetValue = if (isPrivacyMode) 12.dp else 0.dp, label = "blur_anim")
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (listState.isScrollInProgress) {
+            focusManager.clearFocus()
+        }
+    }
 
     var searchQuery by remember { mutableStateOf("") }
     val filteredTx = transactionsWithSplits.filter {
@@ -170,7 +179,7 @@ fun HomeScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().padding(top = 24.dp),
+            modifier = Modifier.fillMaxSize().padding(top = 24.dp).pointerInput(Unit) { detectTapGestures(onTap = { focusManager.clearFocus() }) },
             contentPadding = PaddingValues(bottom = paddingValues.calculateBottomPadding() + 24.dp)
         ) {
             item {
@@ -206,14 +215,21 @@ fun HomeScreen(
                     val prideGradient = androidx.compose.ui.graphics.Brush.linearGradient(colors = listOf(Color(0xFFE40303), Color(0xFFFF8C00), Color(0xFFFFED00), Color(0xFF008026), Color(0xFF24408E), Color(0xFF732982)))
                     val defaultSurfaceColor = AppSurface()
 
-                    Box(
-                        modifier = Modifier
+                    val boxModifier = if (isPrideThemeActive) {
+                        Modifier
                             .fillMaxWidth()
                             .heightIn(min = 250.dp)
                             .border(1.dp, AppText().copy(alpha = 0.15f), RoundedCornerShape(32.dp))
                             .clip(RoundedCornerShape(32.dp))
-                            .background(if (isPrideThemeActive) prideGradient else androidx.compose.ui.graphics.SolidColor(defaultSurfaceColor))
-                    ) {
+                            .background(prideGradient)
+                    } else {
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 250.dp)
+                            .glassCard(32.dp, defaultSurfaceColor)
+                    }
+
+                    Box(modifier = boxModifier) {
                         Column(modifier = Modifier.padding(vertical = 32.dp).fillMaxSize(), verticalArrangement = Arrangement.Center) {
                             Column(modifier = Modifier.padding(horizontal = 32.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -231,7 +247,7 @@ fun HomeScreen(
                                 }
                                 Spacer(modifier = Modifier.height(8.dp))
                                 val balPref = if (balance < 0) "- " else ""
-                                AutoSizeText(text = "$balPref$curSym ${NumberFormat.getInstance(locale).format(abs(balance))}", modifier = Modifier.fillMaxWidth().blur(blurRadius), fontSize = 48.sp, fontWeight = FontWeight.Black, color = Color.White, minimumFallbackSize = 24.sp)
+                                AutoSizeText(text = "$balPref$curSym ${NumberFormat.getInstance(locale).format(abs(balance))}", modifier = Modifier.fillMaxWidth().blur(blurRadius), fontSize = 48.sp, fontWeight = FontWeight.Black, color = if (isPrideThemeActive) Color.White else AppText(), minimumFallbackSize = 24.sp)
                             }
                             Spacer(modifier = Modifier.height(20.dp))
                             var walletData by remember(walletBalances) { mutableStateOf(walletBalances.toList()) }
@@ -263,22 +279,17 @@ fun HomeScreen(
                                                 .glassCard(16.dp, AppBg().copy(alpha = 0.2f))
                                                 .padding(horizontal = 16.dp, vertical = 10.dp)
                                         ) {
-                                            Text(walletName, color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                            Text("$wBalPref$curSym ${NumberFormat.getInstance(locale).format(abs(amt))}", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.blur(blurRadius))
+                                            Text(walletName, color = if (isPrideThemeActive) Color.White.copy(alpha = 0.8f) else AppText().copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            Text("$wBalPref$curSym ${NumberFormat.getInstance(locale).format(abs(amt))}", color = if (isPrideThemeActive) Color.White else AppText(), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.blur(blurRadius))
                                         }
                                     }
                                 }
                             }
                             Spacer(modifier = Modifier.height(20.dp))
-                            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.ArrowUpward, null, tint = if (isPrideThemeActive) Color.White else AppGreen(), modifier = Modifier.size(20.dp))
-                                AutoSizeText(text = "${AppStr.inc} $curSym ${NumberFormat.getInstance(locale).format(income)}", modifier = Modifier.weight(1f).padding(start = 4.dp).blur(blurRadius), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, minimumFallbackSize = 8.sp)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Icon(Icons.Default.ArrowDownward, null, tint = if (isPrideThemeActive) Color.White else AppRed(), modifier = Modifier.size(20.dp))
-                                AutoSizeText(text = "${AppStr.exp} $curSym ${NumberFormat.getInstance(locale).format(expenses)}", modifier = Modifier.weight(1f).padding(start = 4.dp).blur(blurRadius), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, minimumFallbackSize = 8.sp)
-                            }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(32.dp))
 
                     Spacer(modifier = Modifier.height(32.dp))
 
@@ -286,11 +297,8 @@ fun HomeScreen(
                         value = searchQuery, onValueChange = { searchQuery = it }, label = { Text(AppStr.searchTx) },
                         leadingIcon = { Icon(Icons.Default.Search, null, tint = AppText().copy(alpha = 0.5f)) },
                         trailingIcon = { if (searchQuery.isNotEmpty()) { IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Close, null, tint = AppText()) } } },
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), shape = RoundedCornerShape(16.dp), singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AppPrimary(),
-                            unfocusedBorderColor = AppText().copy(alpha = 0.25f)
-                        )
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).glassCard(16.dp, AppSurfaceVariant()), shape = RoundedCornerShape(16.dp), singleLine = true,
+                        colors = getGlassTextFieldColors()
                     )
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -337,21 +345,31 @@ fun HomeScreen(
                         }
                     }
 
-                    items(txs, key = { it.transaction.id }) { item ->
-                        val isSelected = selectedTxs.contains(item.transaction.id)
-                        Box(modifier = Modifier.padding(horizontal = 24.dp)) {
-                            TransactionItem(
-                                profile = profile,
-                                obj = item,
-                                isPrivacyMode = isPrivacyMode,
-                                isSelected = isSelected,
-                                isSelectionMode = isSelectionMode,
-                                onToggleSelect = { onToggleSelect(item.transaction.id) },
-                                onEdit = onEdit,
-                                onDelete = onDelete
-                            )
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp)
+                                .glassCard(24.dp, AppSurfaceVariant())
+                                .padding(vertical = 8.dp)
+                        ) {
+                            txs.forEachIndexed { index, item ->
+                                val isSelected = selectedTxs.contains(item.transaction.id)
+                                TransactionItem(
+                                    profile = profile,
+                                    obj = item,
+                                    isPrivacyMode = isPrivacyMode,
+                                    isSelected = isSelected,
+                                    isSelectionMode = isSelectionMode,
+                                    onToggleSelect = { onToggleSelect(item.transaction.id) },
+                                    onEdit = onEdit,
+                                    onDelete = onDelete
+                                )
+                                if (index < txs.size - 1) {
+                                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = AppText().copy(alpha = 0.1f))
+                                }
+                            }
                         }
-                        Spacer(modifier = Modifier.height(14.dp))
                     }
                 }
             }
@@ -385,7 +403,7 @@ fun HomeScreen(
                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         }
                     ) {
-                        Icon(Icons.Default.Category, contentDescription = null, tint = AppPrimary())
+                        Icon(Icons.Default.DashboardCustomize, contentDescription = null, tint = AppPrimary())
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(AppStr.changeCat, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = AppText())
                     }

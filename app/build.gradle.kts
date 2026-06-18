@@ -13,8 +13,8 @@ android {
         applicationId = "com.bearbones.kumaflow"
         minSdk = 27
         targetSdk = 35
-        versionCode = 22
-        versionName = "4.6.6"
+        versionCode = 23
+        versionName = "5.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -72,4 +72,5 @@ dependencies {
     implementation("com.airbnb.android:lottie-compose:6.4.0")
     implementation("dev.chrisbanes.haze:haze:1.1.1")
     implementation("dev.chrisbanes.haze:haze-materials:1.1.1")
+    implementation("androidx.compose.ui:ui-text-google-fonts:1.6.7")
 }

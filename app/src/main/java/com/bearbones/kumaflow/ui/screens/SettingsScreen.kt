@@ -56,6 +56,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.bearbones.kumaflow.glassCard
+import com.bearbones.kumaflow.getGlassTextFieldColors
+import com.bearbones.kumaflow.AppBg
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
@@ -245,13 +247,13 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 SettingsGroupCard(
                     title = AppStr.accSec,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     items = listOf(
                         AppStr.editProf to Icons.Default.Edit,
                         AppStr.theme to Icons.Default.Palette,
@@ -272,7 +274,7 @@ fun SettingsScreen(
 
                 SettingsGroupCard(
                     title = AppStr.finPref,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     items = listOf(
                         AppStr.cur to Icons.Default.Sync,
                         AppStr.manageWallet to Icons.Default.AccountBalanceWallet,
@@ -295,9 +297,9 @@ fun SettingsScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, AppText().copy(alpha = 0.15f), RoundedCornerShape(28.dp)),
+                    .glassCard(24.dp, AppSurface()),
                 shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = AppSurface())
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
             ) {
                 var expandReminders by remember { mutableStateOf(false) }
 
@@ -316,16 +318,21 @@ fun SettingsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 6.dp),
+                            .padding(vertical = 14.dp, horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.AccountBalanceWallet, null, tint = AppText(), modifier = Modifier.size(20.dp))
+                        Box(
+                            modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(AppPrimary().copy(alpha = 0.1f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.AccountBalanceWallet, null, tint = AppPrimary(), modifier = Modifier.size(18.dp))
+                        }
                         Text(
                             AppStr.carryOver,
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(horizontal = 10.dp),
-                            fontSize = 12.sp,
+                                .padding(horizontal = 14.dp),
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = AppText(),
                             maxLines = 1,
@@ -346,16 +353,21 @@ fun SettingsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 6.dp),
+                            .padding(vertical = 14.dp, horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.NotificationsActive, null, tint = AppText(), modifier = Modifier.size(20.dp))
+                        Box(
+                            modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(AppPrimary().copy(alpha = 0.1f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.NotificationsActive, null, tint = AppPrimary(), modifier = Modifier.size(18.dp))
+                        }
                         Text(
                             AppStr.dailyRem,
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(horizontal = 10.dp),
-                            fontSize = 12.sp,
+                                .padding(horizontal = 14.dp),
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = AppText(),
                             maxLines = 1,
@@ -448,13 +460,13 @@ fun SettingsScreen(
                 }
             }
 
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 SettingsGroupCard(
                     title = AppStr.dat,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     items = listOf(
                         AppStr.expPdf to Icons.Default.PictureAsPdf,
                         AppStr.expCsv to Icons.Default.Description,
@@ -492,7 +504,7 @@ fun SettingsScreen(
 
                 SettingsGroupCard(
                     title = AppStr.abt,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     items = listOf(
                         AppStr.appVer to Icons.Default.Info,
                         AppStr.priv to Icons.Default.PrivacyTip,
@@ -549,8 +561,10 @@ fun SettingsScreen(
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = 4.dp),
+                                        .padding(vertical = 4.dp)
+                                        .glassCard(12.dp, AppSurfaceVariant()),
                                     shape = RoundedCornerShape(12.dp),
+                                    colors = getGlassTextFieldColors(),
                                     singleLine = true
                                 )
                             }
@@ -617,9 +631,10 @@ fun SettingsScreen(
                                 value = newWalletName,
                                 onValueChange = { newWalletName = it },
                                 label = { Text(AppStr.addWallet) },
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier.weight(1f).glassCard(12.dp, AppSurfaceVariant()),
                                 singleLine = true,
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(12.dp),
+                                colors = getGlassTextFieldColors()
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             IconButton(
@@ -770,9 +785,10 @@ fun SettingsScreen(
                                 value = newCatName,
                                 onValueChange = { newCatName = it },
                                 label = { Text(AppStr.catName) },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().glassCard(12.dp, AppSurfaceVariant()),
                                 singleLine = true,
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(12.dp),
+                                colors = getGlassTextFieldColors()
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(AppStr.chooseCatIcon, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = AppText())
@@ -867,7 +883,9 @@ fun SettingsScreen(
                         value = newName,
                         onValueChange = { newName = it },
                         label = { Text(AppStr.usr) },
-                        shape = RoundedCornerShape(12.dp)
+                        modifier = Modifier.fillMaxWidth().glassCard(12.dp, AppSurfaceVariant()),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = getGlassTextFieldColors()
                     )
                 },
                 confirmButton = {
@@ -933,7 +951,10 @@ fun SettingsScreen(
                         value = targetInput,
                         onValueChange = { if (it.all { c -> c.isDigit() }) targetInput = it },
                         label = { Text(AppStr.limExp) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        modifier = Modifier.fillMaxWidth().glassCard(12.dp, AppSurfaceVariant()),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = getGlassTextFieldColors()
                     )
                 },
                 confirmButton = {
@@ -1035,8 +1056,8 @@ fun SettingsScreen(
                             Column(modifier = Modifier
                                 .weight(1f)
                                 .padding(start = 12.dp)) {
-                                Text(AppStr.liquidGlass, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppText())
-                                Text(AppStr.liquidGlassDesc, fontSize = 10.sp, color = AppText().copy(alpha=0.6f))
+                                Text("Kuma Glass UI", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppText())
+                                Text("Enable premium liquid glass styling", fontSize = 10.sp, color = AppText().copy(alpha=0.6f))
                             }
                             Switch(
                                 checked = currentProfile.isLiquidGlass,
@@ -1048,6 +1069,32 @@ fun SettingsScreen(
                                 },
                                 modifier = Modifier.scale(0.8f)
                             )
+                        }
+
+                        if (currentProfile.isLiquidGlass) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier
+                                    .weight(1f)
+                                    .padding(start = 12.dp)) {
+                                    Text("Premium Glass Effect", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppText())
+                                    Text("Turn off for better performance on low-end devices", fontSize = 10.sp, color = AppText().copy(alpha=0.6f))
+                                }
+                                Switch(
+                                    checked = currentProfile.isPremiumGlassBlur,
+                                    onCheckedChange = { isChecked ->
+                                        scope.launch {
+                                            dao.saveProfile(currentProfile.copy(isPremiumGlassBlur = isChecked))
+                                            onForceUpdate()
+                                        }
+                                    },
+                                    modifier = Modifier.scale(0.8f)
+                                )
+                            }
                         }
                     }
                 },
@@ -1066,8 +1113,10 @@ fun SettingsScreen(
                         value = pinInput,
                         onValueChange = { if (it.length <= 6 && it.all { c -> c.isDigit() }) pinInput = it },
                         label = { Text("PIN") },
+                        modifier = Modifier.fillMaxWidth().glassCard(12.dp, AppSurfaceVariant()),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        colors = getGlassTextFieldColors()
                     )
                 },
                 confirmButton = {
@@ -1160,7 +1209,7 @@ fun SettingsScreen(
             fontWeight = FontWeight.Bold,
             color = AppText().copy(alpha = 0.5f)
         )
-        Spacer(modifier = Modifier.height(100.dp))
+        Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding() + 24.dp))
     }
 }
 

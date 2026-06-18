@@ -83,6 +83,32 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- PINTU 4: LOGO PRIDE GLASS (Default Mati) -->
+        <activity-alias
+            android:name=".MainActivityAliasPrideGlass"
+            android:targetActivity=".MainActivity"
+            android:icon="@drawable/kumaprideglass"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- PINTU 5: LOGO BEAR GLASS (Default Mati) -->
+        <activity-alias
+            android:name=".MainActivityAliasBearGlass"
+            android:targetActivity=".MainActivity"
+            android:icon="@drawable/kumabearglass"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
 
 
         <service

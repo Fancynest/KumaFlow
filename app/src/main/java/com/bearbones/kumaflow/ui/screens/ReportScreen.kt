@@ -133,12 +133,24 @@ fun ReportScreen(
     val curSym = when(profile.currency) { "USD", "AUD", "CAD", "SGD" -> "$"; "EUR" -> "€"; "GBP" -> "£"; "JPY", "CNY" -> "¥"; "CHF" -> "CHF"; else -> "Rp" }
 
     fun getCatColor(catName: String): Color {
-        val predefined = mapOf("Financial" to Color(0xFF623802), "Food" to Color(0xFFD5641C), "Shopping" to Color(0xFFFEDD60), "Health" to Color(0xFFFEE6B1), "Transport" to Color(0xFFFFFFFF), "Education" to Color(0xFF929292), "Entertainment" to Color(0xFF000000), "Others" to Color(0xFF006064))
-        return predefined[catName] ?: Color(android.graphics.Color.HSVToColor(floatArrayOf(abs(catName.hashCode()) % 360f, 0.6f, 0.9f)))
+        val predefined = mapOf(
+            "Financial" to Color(0xFF4CAF50),
+            "Food" to Color(0xFFFF9800),
+            "Shopping" to Color(0xFFE91E63),
+            "Health" to Color(0xFFF44336),
+            "Transport" to Color(0xFF2196F3),
+            "Education" to Color(0xFF9C27B0),
+            "Entertainment" to Color(0xFF673AB7),
+            "Transfer" to Color(0xFF00BCD4),
+            "Others" to Color(0xFF607D8B)
+        )
+        return predefined[catName] ?: Color(android.graphics.Color.HSVToColor(floatArrayOf(abs(catName.hashCode()) % 360f, 0.7f, 0.8f)))
     }
 
-    val expensePerCat = monthlyTransactions.filter { !it.isIncome }.groupBy { it.category }.mapValues { entry -> entry.value.sumOf { it.amount.toLongOrNull() ?: 0L } }
+    val expensePerCat = monthlyTransactions.filter { !it.isIncome }.groupBy { it.category }.mapValues { entry -> entry.value.sumOf { it.amount.toLongOrNull() ?: 0L } }.toList().sortedByDescending { it.second }
     val catTargets = remember(profile.categoryTargets) { try { JSONObject(profile.categoryTargets) } catch (e: Exception) { JSONObject() } }
+    val savedIcons = remember(profile.categoryIcons) { try { JSONObject(profile.categoryIcons) } catch (e: Exception) { JSONObject() } }
+    var showAllCategories by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp).padding(top = 24.dp).verticalScroll(rememberScrollState())) {
         Text(AppStr.rep, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
@@ -150,15 +162,29 @@ fun ReportScreen(
         val monthNamesList = if (AppStr.isId) listOf("Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember") else listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
         val currentSelectedMonthName = monthNamesList.getOrElse(selectedMonth - 1) { "" }
 
+        val cal = Calendar.getInstance()
+        val currentMonth = cal.get(Calendar.MONTH) + 1
+        val currentYear = cal.get(Calendar.YEAR)
+        val isCurrentOrFutureMonth = selectedYear > currentYear || (selectedYear == currentYear && selectedMonth >= currentMonth)
+
+        val context = LocalContext.current
+
         OutlinedButton(
-            onClick = { onOpenWrapped(selectedMonth, selectedYear) },
+            onClick = {
+                if (isCurrentOrFutureMonth) {
+                    Toast.makeText(context, "Wrapped $currentSelectedMonthName $selectedYear is Coming Soon!", Toast.LENGTH_SHORT).show()
+                } else {
+                    onOpenWrapped(selectedMonth, selectedYear)
+                }
+            },
             modifier = Modifier.fillMaxWidth().height(50.dp),
             shape = RoundedCornerShape(16.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, AppPrimary().copy(alpha = 0.5f))
+            border = androidx.compose.foundation.BorderStroke(1.dp, if (isCurrentOrFutureMonth) AppText().copy(alpha = 0.2f) else AppPrimary().copy(alpha = 0.5f))
         ) {
-            Icon(Icons.Default.AutoAwesome, contentDescription = "Rewatch", tint = AppPrimary())
+            Icon(if (isCurrentOrFutureMonth) Icons.Default.Lock else Icons.Default.AutoAwesome, contentDescription = "Rewatch", tint = if (isCurrentOrFutureMonth) AppText().copy(alpha = 0.5f) else AppPrimary())
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Putar Ulang Wrapped $currentSelectedMonthName $selectedYear ✨", color = AppPrimary(), fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+            val btnText = if (isCurrentOrFutureMonth) "Wrapped $currentSelectedMonthName $selectedYear (Coming Soon) ✨" else "Putar Ulang Wrapped $currentSelectedMonthName $selectedYear ✨"
+            Text(btnText, color = if (isCurrentOrFutureMonth) AppText().copy(alpha = 0.5f) else AppPrimary(), fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -167,26 +193,54 @@ fun ReportScreen(
         val prideGradient = Brush.linearGradient(colors = listOf(Color(0xFFE40303), Color(0xFFFF8C00), Color(0xFFFFED00), Color(0xFF008026), Color(0xFF24408E), Color(0xFF732982)))
         val defaultSurfaceColor = AppSurface()
 
-        Box(
-            modifier = Modifier
+        val boxModifier = if (isPrideThemeActive) {
+            Modifier
                 .fillMaxWidth()
                 .heightIn(min = 185.dp)
                 .border(1.dp, AppText().copy(alpha = 0.1f), RoundedCornerShape(32.dp))
                 .clip(RoundedCornerShape(32.dp))
-                .background(if (isPrideThemeActive) prideGradient else androidx.compose.ui.graphics.SolidColor(defaultSurfaceColor))
-        ) {
-            Row(modifier = Modifier.padding(24.dp).fillMaxSize(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                    Text(AppStr.sum, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = if (isPrideThemeActive) Color.White else AppText())
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(AppStr.net, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
-                    val balPref = if (balance < 0) "- " else "+"
-                    AutoSizeText(text = "$curSym $balPref${NumberFormat.getInstance(locale).format(abs(balance))}", modifier = Modifier.fillMaxWidth(), fontSize = 22.sp, fontWeight = FontWeight.Black, color = Color.White, minimumFallbackSize = 14.sp)
-                }
-                Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
-                    IncomeExpensePill(AppStr.inc, "$curSym ${NumberFormat.getInstance(locale).format(income)}", if (isPrideThemeActive) Color.White else AppGreen(), true)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    IncomeExpensePill(AppStr.exp, "$curSym ${NumberFormat.getInstance(locale).format(expenses)}", if (isPrideThemeActive) Color.White else AppRed(), false)
+                .background(prideGradient)
+        } else {
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 185.dp)
+                .glassCard(32.dp, defaultSurfaceColor)
+        }
+
+        Box(modifier = boxModifier) {
+            Column(modifier = Modifier.padding(24.dp).fillMaxSize()) {
+                Text(AppStr.sum, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = if (isPrideThemeActive) Color.White else AppText())
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Text(AppStr.net, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (isPrideThemeActive) Color.White.copy(alpha = 0.8f) else AppText().copy(alpha = 0.8f))
+                val balPref = if (balance < 0) "- " else "+"
+                AutoSizeText(text = "$curSym $balPref${NumberFormat.getInstance(locale).format(abs(balance))}", modifier = Modifier.fillMaxWidth(), fontSize = 32.sp, fontWeight = FontWeight.Black, color = if (isPrideThemeActive) Color.White else AppText(), minimumFallbackSize = 18.sp)
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(modifier = Modifier.weight(1f).glassCard(16.dp, if (isPrideThemeActive) Color.White.copy(alpha = 0.1f) else AppSurfaceVariant()).padding(12.dp)) {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.ArrowUpward, null, tint = if (isPrideThemeActive) Color.White else AppGreen(), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(AppStr.inc, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isPrideThemeActive) Color.White.copy(alpha = 0.8f) else AppText().copy(alpha = 0.8f))
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            AutoSizeText(text = "$curSym ${NumberFormat.getInstance(locale).format(income)}", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = if (isPrideThemeActive) Color.White else AppText(), minimumFallbackSize = 10.sp)
+                        }
+                    }
+                    Box(modifier = Modifier.weight(1f).glassCard(16.dp, if (isPrideThemeActive) Color.White.copy(alpha = 0.1f) else AppSurfaceVariant()).padding(12.dp)) {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.ArrowDownward, null, tint = if (isPrideThemeActive) Color.White else AppRed(), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(AppStr.exp, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isPrideThemeActive) Color.White.copy(alpha = 0.8f) else AppText().copy(alpha = 0.8f))
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            AutoSizeText(text = "$curSym ${NumberFormat.getInstance(locale).format(expenses)}", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = if (isPrideThemeActive) Color.White else AppText(), minimumFallbackSize = 10.sp)
+                        }
+                    }
                 }
             }
         }
@@ -209,9 +263,9 @@ fun ReportScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(1.dp, AppText().copy(alpha = 0.1f), RoundedCornerShape(32.dp)),
+                .glassCard(32.dp, AppSurface()),
             shape = RoundedCornerShape(32.dp),
-            colors = CardDefaults.cardColors(containerColor = AppSurface())
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent)
         ) {
             Column(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(modifier = Modifier.size(180.dp).padding(16.dp), contentAlignment = Alignment.Center) {
@@ -235,34 +289,65 @@ fun ReportScreen(
                     Text(AppStr.noData, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppText().copy(alpha = 0.6f), modifier = Modifier.padding(vertical = 16.dp))
                 } else {
                     Spacer(modifier = Modifier.height(16.dp))
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        expensePerCat.forEach { (label, amt) ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .glassCard(24.dp, AppSurfaceVariant())
+                            .padding(vertical = 8.dp)
+                    ) {
+                        var index = 0
+                        val itemsToShow = if (showAllCategories) expensePerCat else expensePerCat.take(5)
+                        
+                        itemsToShow.forEach { (label, amt) ->
                             val target = catTargets.optLong(label, 0L)
                             val catCol = getCatColor(label)
                             val progress = if (target > 0) (amt.toFloat() / target.toFloat()).coerceIn(0f, 1f) else 0f
                             val isOverLimit = target > 0 && amt > target
 
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .height(55.dp)
-                                    .border(1.dp, AppText().copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = CardDefaults.cardColors(containerColor = AppSurfaceVariant().copy(alpha = 0.5f))
-                            ) {
-                                Box(modifier = Modifier.fillMaxSize()) {
-                                    if (target > 0) Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(progress).background(catCol.copy(alpha = 0.2f)).align(Alignment.CenterStart))
-                                    Row(modifier = Modifier.padding(horizontal = 16.dp).fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Stop, contentDescription = null, tint = catCol, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(label, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppText(), modifier = Modifier.weight(1f))
-                                        Text("$curSym ${NumberFormat.getInstance(locale).format(amt)}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppText())
+                            val iconKey = savedIcons.optString(label, "")
+                            val icon = kumaIconLibrary[iconKey] ?: when(label) {
+                                "Financial" -> Icons.Default.AccountBalance
+                                "Food" -> Icons.Default.Restaurant
+                                "Shopping" -> Icons.Default.LocalMall
+                                "Health" -> Icons.Default.Favorite
+                                "Transport" -> Icons.Default.DirectionsCar
+                                "Education" -> Icons.Default.School
+                                "Entertainment" -> Icons.Default.Gamepad
+                                "Transfer" -> Icons.Default.SyncAlt
+                                else -> Icons.Default.DashboardCustomize
+                            }
+
+                            Box(modifier = Modifier.fillMaxWidth().height(65.dp)) {
+                                if (target > 0) Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(progress).background(catCol.copy(alpha = 0.15f)).align(Alignment.CenterStart))
+                                Row(modifier = Modifier.padding(horizontal = 16.dp).fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                                    Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(catCol.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
+                                        Icon(icon, contentDescription = null, tint = catCol, modifier = Modifier.size(18.dp))
                                     }
-                                    if (target > 0) {
-                                        val budgetInfo = if(isOverLimit) "$curSym ${NumberFormat.getInstance(locale).format(amt-target)} OVER!" else "$curSym ${NumberFormat.getInstance(locale).format(target-amt)} left"
-                                        Text(budgetInfo, fontSize = 9.sp, color = if(isOverLimit) AppRed() else AppText().copy(alpha=0.7f), modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 4.dp))
-                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(label, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = AppText(), modifier = Modifier.weight(1f))
+                                    Text("$curSym ${NumberFormat.getInstance(locale).format(amt)}", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
+                                }
+                                if (target > 0) {
+                                    val budgetInfo = if(isOverLimit) "$curSym ${NumberFormat.getInstance(locale).format(amt-target)} OVER!" else "$curSym ${NumberFormat.getInstance(locale).format(target-amt)} left"
+                                    Text(budgetInfo, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if(isOverLimit) AppRed() else AppText().copy(alpha=0.6f), modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 6.dp))
+                                }
+                            }
+
+                            if (index < itemsToShow.size - 1) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 60.dp),
+                                    color = AppText().copy(alpha = 0.05f)
+                                )
+                            }
+                            index++
+                        }
+                        
+                        if (expensePerCat.size > 5) {
+                            TextButton(onClick = { showAllCategories = !showAllCategories }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(if (showAllCategories) "Show Less" else "Show More (${expensePerCat.size - 5})", color = AppPrimary(), fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(if (showAllCategories) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, null, tint = AppPrimary())
                                 }
                             }
                         }
@@ -279,9 +364,9 @@ fun ReportScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(280.dp)
-                .border(1.dp, AppText().copy(alpha = 0.1f), RoundedCornerShape(32.dp)),
+                .glassCard(32.dp, AppSurface()),
             shape = RoundedCornerShape(32.dp),
-            colors = CardDefaults.cardColors(containerColor = AppSurface())
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent)
         ) {
             Column(modifier = Modifier.padding(16.dp).fillMaxSize()) {
                 val greenCol = AppGreen()
@@ -364,7 +449,7 @@ fun ReportScreen(
                 }
             }
         }
-        Spacer(modifier = Modifier.height(100.dp))
+        Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding() + 24.dp))
     }
 }
 fun DrawScope.drawTrendsArea(points: List<Float>, color: Color) {

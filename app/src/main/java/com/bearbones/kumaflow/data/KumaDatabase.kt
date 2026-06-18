@@ -69,7 +69,8 @@ data class UserProfile(
     val categoryTargets: String = "{}",
     val isAmoledMode: Boolean = false,
     val categoryIcons: String = "{}",
-    val isLiquidGlass: Boolean = false
+    val isLiquidGlass: Boolean = false,
+    val isPremiumGlassBlur: Boolean = false
 )
 
 @Dao
@@ -156,13 +157,19 @@ val MIGRATION_15_16 = object : Migration(15, 16) {
     }
 }
 
+val MIGRATION_16_17 = object : Migration(16, 17) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE user_profile ADD COLUMN isPremiumGlassBlur INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 @Database(
     entities = [
         KumaTransaction::class,
         UserProfile::class,
         TransactionSplit::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 abstract class KumaDatabase : RoomDatabase() {
@@ -178,7 +185,7 @@ abstract class KumaDatabase : RoomDatabase() {
                     KumaDatabase::class.java,
                     "kuma_database"
                 )
-                    .addMigrations(MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
+                    .addMigrations(MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

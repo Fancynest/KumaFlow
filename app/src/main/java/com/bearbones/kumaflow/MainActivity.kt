@@ -59,6 +59,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -120,6 +121,7 @@ import androidx.compose.foundation.border
 val LocalIsDark = compositionLocalOf { true }
 val LocalIsAmoled = compositionLocalOf { false }
 val LocalIsLiquidGlass = compositionLocalOf { false }
+val LocalIsPremiumGlassBlur = compositionLocalOf { false }
 val LocalHazeState = compositionLocalOf { HazeState() }
 
 @Composable
@@ -156,7 +158,7 @@ fun Modifier.glassmorphic(
         val glassColor = if (LocalIsDark.current) {
             Color.White.copy(alpha = 0.05f)
         } else {
-            Color.White.copy(alpha = 0.4f)
+            Color.White.copy(alpha = 0.15f)
         }
         val borderColor = if (LocalIsDark.current) {
             Color.White.copy(alpha = borderAlpha)
@@ -181,23 +183,71 @@ fun Modifier.glassmorphic(
 fun Modifier.glassCard(
     radius: androidx.compose.ui.unit.Dp = 16.dp,
     fallbackColor: Color,
-    useHaze: Boolean = false
-): Modifier {
-    val glassColor = if (LocalIsDark.current) {
-        if (fallbackColor.luminance() > 0.5f) Color.Black.copy(alpha = 0.4f) else fallbackColor.copy(alpha = 0.5f)
+    useHaze: Boolean = false,
+    forceColor: Boolean = false
+): Modifier = composed {
+    val glassColor = if (forceColor) {
+        fallbackColor
+    } else if (LocalIsDark.current) {
+        if (fallbackColor.luminance() > 0.5f) Color.Black.copy(alpha = 0.2f) else fallbackColor.copy(alpha = 0.25f)
     } else {
-        if (fallbackColor.luminance() < 0.5f) Color.White.copy(alpha = 0.4f) else fallbackColor.copy(alpha = 0.5f)
+        if (fallbackColor.luminance() < 0.5f) Color.White.copy(alpha = 0.15f) else fallbackColor.copy(alpha = 0.15f)
     }
-    return if (LocalIsLiquidGlass.current) {
+
+    val shineGradient = remember {
+        Brush.linearGradient(
+            colors = listOf(
+                Color.White.copy(alpha = 0.15f),
+                Color.Transparent,
+                Color.Transparent,
+                Color.White.copy(alpha = 0.05f)
+            ),
+            start = Offset.Zero,
+            end = Offset.Infinite
+        )
+    }
+
+    val borderGradient = remember {
+        Brush.linearGradient(
+            colors = listOf(Color.White.copy(alpha = 0.3f), Color.White.copy(alpha = 0.05f))
+        )
+    }
+
+    if (LocalIsLiquidGlass.current) {
+        val hazeModifier = if (LocalIsPremiumGlassBlur.current) {
+            Modifier.hazeChild(
+                state = LocalHazeState.current,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(radius),
+                style = HazeStyle(blurRadius = 16.dp, backgroundColor = Color.Transparent, tint = dev.chrisbanes.haze.HazeTint(glassColor))
+            )
+        } else {
+            Modifier.background(glassColor)
+        }
+
         this.clip(androidx.compose.foundation.shape.RoundedCornerShape(radius))
-            .background(glassColor)
-            .border(1.dp, Color.White.copy(alpha = 0.2f), androidx.compose.foundation.shape.RoundedCornerShape(radius))
+            .then(hazeModifier)
+            .background(shineGradient)
+            .border(1.dp, borderGradient, androidx.compose.foundation.shape.RoundedCornerShape(radius))
     } else {
         this.clip(androidx.compose.foundation.shape.RoundedCornerShape(radius)).background(fallbackColor)
     }
 }
 
-
+@Composable
+fun getGlassTextFieldColors(): androidx.compose.material3.TextFieldColors {
+    return if (LocalIsLiquidGlass.current) {
+        val glassContainer = Color.Transparent
+        val glassBorder = Color.Transparent
+        OutlinedTextFieldDefaults.colors(
+            unfocusedContainerColor = glassContainer,
+            focusedContainerColor = glassContainer,
+            unfocusedBorderColor = glassBorder,
+            focusedBorderColor = AppPrimary()
+        )
+    } else {
+        OutlinedTextFieldDefaults.colors()
+    }
+}
 
 fun showBiometricPrompt(activity: FragmentActivity, onSuccess: () -> Unit, onError: (String) -> Unit) {
     val executor = ContextCompat.getMainExecutor(activity)
@@ -346,6 +396,7 @@ fun MainScreen(
                         onMonthChange = { m: Int, y: Int -> haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); selectedMonth = m; selectedYear = y },
                         onEdit = { t: TransactionWithSplits -> transactionToEdit = t; showBottomSheet = true },
                         onDelete = { t: TransactionWithSplits -> scope.launch { dao.deleteTransaction(t.transaction); updateKumaWidget(context) } },
+
                         onOpenWrapped = onOpenWrapped,
                         listState = homeListState,
                         selectedTxs = selectedTxs,
@@ -1373,14 +1424,10 @@ fun SettingsGroupCard(
 ) {
     Card(
         modifier = modifier
-            .heightIn(min = 230.dp)
-            .border(
-                width = 1.dp,
-                color = AppText().copy(alpha = 0.15f),
-                shape = RoundedCornerShape(28.dp)
-            ),
+            .fillMaxWidth()
+            .glassCard(24.dp, AppSurface()),
         shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = AppSurface())
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(
@@ -1393,21 +1440,27 @@ fun SettingsGroupCard(
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(18.dp))
-            items.forEach { (label, icon) ->
+            items.forEachIndexed { index, (label, icon) ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 6.dp)
-                        .clickable { onClick(label) },
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onClick(label) }
+                        .padding(vertical = 14.dp, horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(icon, null, tint = AppText(), modifier = Modifier.size(20.dp))
+                    Box(
+                        modifier = Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(AppPrimary().copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(icon, null, tint = AppPrimary(), modifier = Modifier.size(18.dp))
+                    }
                     Text(
                         label,
                         modifier = Modifier
                             .weight(1f)
-                            .padding(start = 10.dp),
-                        fontSize = 10.sp,
+                            .padding(start = 14.dp),
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = AppText(),
                         maxLines = 1,
@@ -1417,9 +1470,14 @@ fun SettingsGroupCard(
                         Switch(
                             checked = isSwitchOn,
                             onCheckedChange = onSwitchChange,
-                            modifier = Modifier.scale(0.6f)
+                            modifier = Modifier.scale(0.8f)
                         )
+                    } else {
+                        Icon(Icons.Default.ChevronRight, contentDescription = null, tint = AppText().copy(alpha = 0.3f))
                     }
+                }
+                if (index < items.size - 1) {
+                    HorizontalDivider(modifier = Modifier.padding(start = 50.dp), color = AppText().copy(alpha = 0.05f))
                 }
             }
         }
@@ -1435,10 +1493,10 @@ fun CustomBottomNav(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 20.dp)
-            .height(85.dp)
-            .border(1.dp, AppText().copy(alpha = 0.15f), RoundedCornerShape(24.dp))
-            .glassCard(24.dp, AppSurface(), useHaze = false)
+            .padding(start = 24.dp, end = 24.dp, bottom = 24.dp)
+            .height(75.dp)
+            .glassCard(32.dp, AppSurface(), useHaze = true)
+            .border(1.dp, AppText().copy(alpha = 0.1f), RoundedCornerShape(32.dp))
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
@@ -1587,7 +1645,7 @@ fun TransactionItem(
         "Education" -> Icons.Default.School
         "Entertainment" -> Icons.Default.Gamepad
         "Transfer" -> Icons.Default.SyncAlt
-        else -> Icons.Default.Category
+        else -> Icons.Default.DashboardCustomize
     }
 
     if (showDeleteDialog) {
@@ -1636,8 +1694,8 @@ fun TransactionItem(
         enableDismissFromEndToStart = !isSelectionMode,
         backgroundContent = {
             val color = when (dismissState.dismissDirection) {
-                SwipeToDismissBoxValue.StartToEnd -> Color(0xFF1976D2)
-                SwipeToDismissBoxValue.EndToStart -> AppRed()
+                SwipeToDismissBoxValue.StartToEnd -> Color(0xFF1976D2).copy(alpha = 0.85f)
+                SwipeToDismissBoxValue.EndToStart -> AppRed().copy(alpha = 0.85f)
                 else -> Color.Transparent
             }
             val alignment = when (dismissState.dismissDirection) {
@@ -1648,18 +1706,20 @@ fun TransactionItem(
             val iconSwipe = when (dismissState.dismissDirection) {
                 SwipeToDismissBoxValue.StartToEnd -> Icons.Default.Edit
                 SwipeToDismissBoxValue.EndToStart -> Icons.Default.Delete
-                else -> Icons.Default.Category
+                else -> null
             }
 
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(RoundedCornerShape(20.dp))
-                    .background(color)
+                    .glassCard(20.dp, color, forceColor = true)
                     .padding(horizontal = 24.dp),
                 contentAlignment = alignment
             ) {
-                Icon(iconSwipe, contentDescription = null, tint = Color.White)
+                if (iconSwipe != null) {
+                    Icon(iconSwipe, contentDescription = null, tint = Color.White)
+                }
             }
         }
     ) {
@@ -1667,8 +1727,11 @@ fun TransactionItem(
         val finalCardColor = if (isSelected) AppPrimary().copy(alpha = 0.5f) else baseCardColor
 
         Card(
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(if (isSelected) AppPrimary().copy(alpha = 0.2f) else Color.Transparent)
                 .border(
                     width = if (isSelected) 2.dp else 0.dp,
                     color = if (isSelected) AppPrimary() else Color.Transparent,
@@ -1693,8 +1756,7 @@ fun TransactionItem(
                         }
                     }
                 ),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = finalCardColor)
+            shape = RoundedCornerShape(20.dp)
         ) {
             Row(
                 modifier = Modifier.padding(18.dp),
@@ -1704,7 +1766,7 @@ fun TransactionItem(
                     Box(
                         modifier = Modifier
                             .size(30.dp)
-                            .background(if (isSelected) AppPrimary() else Color.White.copy(alpha = 0.3f), CircleShape),
+                            .background(if (isSelected) AppPrimary() else AppPrimary().copy(alpha = 0.2f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         if (isSelected) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(18.dp))
@@ -1714,22 +1776,22 @@ fun TransactionItem(
                     Box(
                         modifier = Modifier
                             .size(45.dp)
-                            .background(Color.White.copy(alpha = 0.3f), CircleShape),
+                            .background(AppPrimary().copy(alpha = 0.2f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                        Icon(icon, null, tint = AppPrimary(), modifier = Modifier.size(24.dp))
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                 }
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(trans.name, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(trans.name, color = AppText(), fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
 
                     if (trans.message.isNotEmpty()) {
-                        Text(trans.message, color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp, bottom = 2.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(trans.message, color = AppText().copy(alpha = 0.7f), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp, bottom = 2.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
 
-                    Text("${trans.wallet} • ${trans.category}", color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${trans.wallet} • ${trans.category}", color = AppText().copy(alpha = 0.5f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
 
                 val formatted = remember(trans.amount) {
@@ -1742,7 +1804,7 @@ fun TransactionItem(
 
                 AutoSizeText(
                     text = "${if (trans.isIncome) "+ " else "- "} $curSym $formatted",
-                    color = if (trans.isIncome) Color.White else AppText(),
+                    color = AppText(),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.widthIn(max = 120.dp).padding(start = 8.dp).blur(blurRadius),
@@ -1763,17 +1825,17 @@ fun updateKumaWidget(context: Context) {
 }
 
 fun checkAndApplyPrideEasterEgg(context: android.content.Context, userName: String?) {
-    if (userName.isNullOrEmpty()) return
-
     val pm = context.packageManager
     val pkg = context.packageName
 
     val normalIcon = android.content.ComponentName(context, "$pkg.MainActivityAliasNormal")
     val prideIcon = android.content.ComponentName(context, "$pkg.MainActivityAliasPride")
     val bearIcon = android.content.ComponentName(context, "$pkg.MainActivityAliasBear")
+    val prideGlassIcon = android.content.ComponentName(context, "$pkg.MainActivityAliasPrideGlass")
+    val bearGlassIcon = android.content.ComponentName(context, "$pkg.MainActivityAliasBearGlass")
 
     fun setIcon(targetIcon: android.content.ComponentName) {
-        val allIcons = listOf(normalIcon, prideIcon, bearIcon)
+        val allIcons = listOf(normalIcon, prideIcon, bearIcon, prideGlassIcon, bearGlassIcon)
         for (icon in allIcons) {
             val state = if (icon == targetIcon) {
                 android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
@@ -1791,19 +1853,15 @@ fun checkAndApplyPrideEasterEgg(context: android.content.Context, userName: Stri
         }
     }
 
-    val currentMonth = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH)
-    if (currentMonth == java.util.Calendar.JUNE) {
-        when {
-            userName.contains("ðŸŒˆ") || userName.contains("#pride", ignoreCase = true) -> setIcon(
-                prideIcon
-            )
-            userName.contains("ðŸ»") || userName.contains("#bear", ignoreCase = true) -> setIcon(
-                bearIcon
-            )
-            else -> setIcon(normalIcon)
-        }
-    } else {
+    if (userName.isNullOrEmpty()) {
         setIcon(normalIcon)
+        return
+    }
+
+    when {
+        userName.contains("🌈") || userName.contains("#pride", ignoreCase = true) -> setIcon(prideIcon)
+        userName.contains("🐻") || userName.contains("#bear", ignoreCase = true) -> setIcon(bearIcon)
+        else -> setIcon(normalIcon)
     }
 }
 

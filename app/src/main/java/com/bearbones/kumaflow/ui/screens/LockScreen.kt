@@ -1,4 +1,4 @@
-﻿@file:Suppress("SpellCheckingInspection", "UNUSED_PARAMETER", "unused", "CanBeVal", "DEPRECATION", "ScheduleExactAlarm")
+@file:Suppress("SpellCheckingInspection", "UNUSED_PARAMETER", "unused", "CanBeVal", "DEPRECATION", "ScheduleExactAlarm")
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.bearbones.kumaflow
@@ -284,7 +284,7 @@ class MainActivity : FragmentActivity() {
             // ðŸ”¥ NEW STATE TO CAPTURE CURRENT MONTH & YEAR ðŸ”¥
             var wrappedTarget by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
-            LaunchedEffect(userProfile?.userName) {
+            LaunchedEffect(userProfile?.userName, userProfile?.isLiquidGlass) {
                 checkAndApplyPrideEasterEgg(context, userProfile?.userName)
             }
 
@@ -311,7 +311,8 @@ class MainActivity : FragmentActivity() {
             CompositionLocalProvider(
                 LocalIsDark provides isDark,
                 LocalIsAmoled provides isAmoled,
-                LocalIsLiquidGlass provides (userProfile?.isLiquidGlass == true)
+                LocalIsLiquidGlass provides (userProfile?.isLiquidGlass == true),
+                LocalIsPremiumGlassBlur provides (userProfile?.isPremiumGlassBlur == true)
             ) {
                 val colorScheme = when {
                     // 1. Easter Egg Pride & Bear
