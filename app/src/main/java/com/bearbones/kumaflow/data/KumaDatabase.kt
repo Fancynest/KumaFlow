@@ -1,4 +1,4 @@
-﻿package com.bearbones.kumaflow
+package com.bearbones.kumaflow
 
 import android.content.Context
 import androidx.room.*
@@ -68,7 +68,8 @@ data class UserProfile(
     val wallets: String = "Cash,Bank BCA,GoPay",
     val categoryTargets: String = "{}",
     val isAmoledMode: Boolean = false,
-    val categoryIcons: String = "{}"
+    val categoryIcons: String = "{}",
+    val isLiquidGlass: Boolean = false
 )
 
 @Dao
@@ -149,13 +150,19 @@ val MIGRATION_14_15 = object : Migration(14, 15) {
     }
 }
 
+val MIGRATION_15_16 = object : Migration(15, 16) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE user_profile ADD COLUMN isLiquidGlass INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 @Database(
     entities = [
         KumaTransaction::class,
         UserProfile::class,
         TransactionSplit::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 abstract class KumaDatabase : RoomDatabase() {
@@ -171,7 +178,7 @@ abstract class KumaDatabase : RoomDatabase() {
                     KumaDatabase::class.java,
                     "kuma_database"
                 )
-                    .addMigrations(MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
+                    .addMigrations(MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

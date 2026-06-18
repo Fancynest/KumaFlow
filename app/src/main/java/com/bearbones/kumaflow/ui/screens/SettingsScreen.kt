@@ -1,4 +1,4 @@
-@file:Suppress("SpellCheckingInspection", "UNUSED_PARAMETER", "unused", "CanBeVal", "DEPRECATION", "ScheduleExactAlarm")
+﻿@file:Suppress("SpellCheckingInspection", "UNUSED_PARAMETER", "unused", "CanBeVal", "DEPRECATION", "ScheduleExactAlarm")
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.bearbones.kumaflow
@@ -54,6 +54,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.bearbones.kumaflow.glassCard
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
@@ -394,8 +395,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 8.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(AppSurfaceVariant())
+                                .glassCard(12.dp, AppSurfaceVariant())
                                 .padding(12.dp)
                         ) {
                             val timesList = currentProfile.reminderTimes.split(",")
@@ -666,8 +666,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(40.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(AppSurfaceVariant())
+                                .glassCard(12.dp, AppSurfaceVariant())
                         ) {
                             Box(
                                 modifier = Modifier
@@ -779,7 +778,7 @@ fun SettingsScreen(
 
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(5),
-                                modifier = Modifier.height(120.dp).clip(RoundedCornerShape(8.dp)).background(AppSurfaceVariant())
+                                modifier = Modifier.height(120.dp).glassCard(8.dp, AppSurfaceVariant())
                             ) {
                                 items(kumaIconLibrary.keys.toList()) { key ->
                                     val icon = kumaIconLibrary[key]!!
@@ -1121,4 +1120,7 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(100.dp))
     }
 }
+
+
+
 

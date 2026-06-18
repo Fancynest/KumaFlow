@@ -1,4 +1,4 @@
-@file:Suppress("SpellCheckingInspection", "UNUSED_PARAMETER", "unused", "CanBeVal", "DEPRECATION", "ScheduleExactAlarm")
+﻿@file:Suppress("SpellCheckingInspection", "UNUSED_PARAMETER", "unused", "CanBeVal", "DEPRECATION", "ScheduleExactAlarm")
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.bearbones.kumaflow
@@ -54,6 +54,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.bearbones.kumaflow.glassCard
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.scale
@@ -410,4 +411,6 @@ fun DrawScope.drawTrendsArea(points: List<Float>, color: Color) {
     drawCircle(color, radius = 5.dp.toPx(), center = Offset(lastX, lastY))
     drawCircle(Color.White, radius = 2.5f.dp.toPx(), center = Offset(lastX, lastY))
 }
+
+
 

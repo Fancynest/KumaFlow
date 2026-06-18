@@ -1,4 +1,4 @@
-﻿@file:Suppress("SpellCheckingInspection", "UNUSED_PARAMETER", "unused", "CanBeVal", "DEPRECATION", "ScheduleExactAlarm")
+@file:Suppress("SpellCheckingInspection", "UNUSED_PARAMETER", "unused", "CanBeVal", "DEPRECATION", "ScheduleExactAlarm")
 
 package com.bearbones.kumaflow
 
@@ -116,6 +116,7 @@ import androidx.compose.foundation.border
 
 val LocalIsDark = compositionLocalOf { true }
 val LocalIsAmoled = compositionLocalOf { false }
+val LocalIsLiquidGlass = compositionLocalOf { false }
 
 @Composable
 fun AppBg() = MaterialTheme.colorScheme.background
@@ -141,6 +142,48 @@ fun AppGreen() = if (LocalIsDark.current) Color(0xFF66BB6A) else Color(0xFF1B5E2
 
 @Composable
 fun AppRed() = if (LocalIsDark.current) Color(0xFFEF5350) else Color(0xFFB71C1C)
+
+@Composable
+fun Modifier.glassmorphic(
+    radius: androidx.compose.ui.unit.Dp = 16.dp,
+    borderAlpha: Float = 0.2f
+): Modifier {
+    return if (LocalIsLiquidGlass.current) {
+        val glassColor = if (LocalIsDark.current) {
+            Color.White.copy(alpha = 0.05f)
+        } else {
+            Color.White.copy(alpha = 0.4f)
+        }
+        val borderColor = if (LocalIsDark.current) {
+            Color.White.copy(alpha = borderAlpha)
+        } else {
+            Color.White.copy(alpha = 0.5f)
+        }
+        
+        this
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(radius))
+            .background(glassColor)
+            .border(
+                width = 1.dp,
+                color = borderColor,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(radius)
+            )
+    } else {
+        this
+    }
+}
+
+@Composable
+fun Modifier.glassCard(
+    radius: androidx.compose.ui.unit.Dp = 16.dp,
+    fallbackColor: Color
+): Modifier {
+    return if (LocalIsLiquidGlass.current) {
+        this.glassmorphic(radius)
+    } else {
+        this.clip(androidx.compose.foundation.shape.RoundedCornerShape(radius)).background(fallbackColor)
+    }
+}
 
 
 
@@ -471,8 +514,7 @@ fun TransactionBottomSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(AppSurfaceVariant())
+                .glassCard(16.dp, AppSurfaceVariant())
         ) {
             Box(
                 modifier = Modifier
@@ -912,7 +954,7 @@ fun TransactionBottomSheet(
 
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(5),
-                        modifier = Modifier.height(150.dp).clip(RoundedCornerShape(8.dp)).background(AppSurfaceVariant())
+                        modifier = Modifier.height(150.dp).glassCard(8.dp, AppSurfaceVariant())
                     ) {
                         items(kumaIconLibrary.keys.toList()) { key ->
                             val icon = kumaIconLibrary[key]!!
@@ -979,8 +1021,7 @@ fun MonthYearSelector(currentMonth: Int, currentYear: Int, onMonthChange: (Int, 
         horizontalArrangement = Arrangement.Center,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(AppSurfaceVariant())
+            .glassCard(20.dp, AppSurfaceVariant())
             .padding(vertical = 6.dp)
     ) {
         IconButton(
@@ -1367,8 +1408,7 @@ fun CustomBottomNav(
             .padding(horizontal = 24.dp, vertical = 20.dp)
             .height(85.dp)
             .border(1.dp, AppText().copy(alpha = 0.15f), RoundedCornerShape(24.dp))
-            .clip(RoundedCornerShape(24.dp))
-            .background(AppSurface())
+            .glassCard(24.dp, AppSurface())
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
@@ -1799,3 +1839,7 @@ fun evaluateMathExpression(input: String): Long? {
         null
     }
 }
+
+
+
+
