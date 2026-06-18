@@ -1,4 +1,4 @@
-﻿@file:Suppress("SpellCheckingInspection", "UNUSED_PARAMETER", "unused", "CanBeVal", "DEPRECATION", "ScheduleExactAlarm")
+@file:Suppress("SpellCheckingInspection", "UNUSED_PARAMETER", "unused", "CanBeVal", "DEPRECATION", "ScheduleExactAlarm")
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 
 package com.bearbones.kumaflow
@@ -1000,6 +1000,30 @@ fun SettingsScreen(
                                 onCheckedChange = { isChecked ->
                                     scope.launch {
                                         dao.saveProfile(currentProfile.copy(isAmoledMode = isChecked))
+                                        onForceUpdate()
+                                    }
+                                },
+                                modifier = Modifier.scale(0.8f)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 12.dp)) {
+                                Text(AppStr.liquidGlass, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppText())
+                                Text(AppStr.liquidGlassDesc, fontSize = 10.sp, color = AppText().copy(alpha=0.6f))
+                            }
+                            Switch(
+                                checked = currentProfile.isLiquidGlass,
+                                onCheckedChange = { isChecked ->
+                                    scope.launch {
+                                        dao.saveProfile(currentProfile.copy(isLiquidGlass = isChecked))
                                         onForceUpdate()
                                     }
                                 },
