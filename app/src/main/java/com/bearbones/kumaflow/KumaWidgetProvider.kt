@@ -39,22 +39,42 @@ class KumaWidgetProvider : AppWidgetProvider() {
     private fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, widgetId: Int) {
         val views = RemoteViews(context.packageName, R.layout.widget_kumaflow)
 
-        // Set onClick listener to launch the main application interface
+        // Set onClick listener on the entire widget root to launch the app
         val intent = Intent(context, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         views.setOnClickPendingIntent(R.id.tv_widget_balance, pendingIntent)
+
+        // Immediately show a loading state so the widget doesn't stay stuck on XML template text
+        views.setTextViewText(R.id.tv_widget_balance, "...")
+        views.setTextViewText(R.id.tv_widget_income, "...")
+        views.setTextViewText(R.id.tv_widget_expense, "...")
+        views.setTextViewText(R.id.tv_w1_name, "")
+        views.setTextViewText(R.id.tv_w1_bal, "")
+        views.setTextViewText(R.id.tv_w2_name, "")
+        views.setTextViewText(R.id.tv_w2_bal, "")
+        views.setTextViewText(R.id.tv_w3_name, "")
+        views.setTextViewText(R.id.tv_w3_bal, "")
+        appWidgetManager.updateAppWidget(widgetId, views)
 
         // Fetch application data asynchronously in the background
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val db = KumaDatabase.getDatabase(context)
-                val profile = db.transactionDao().getUserProfile().firstOrNull() ?: return@launch
+                val profile = db.transactionDao().getUserProfile().firstOrNull()
+                if (profile == null) {
+                    // No profile yet — show zeros
+                    views.setTextViewText(R.id.tv_widget_balance, "Rp 0")
+                    views.setTextViewText(R.id.tv_widget_income, "Rp 0")
+                    views.setTextViewText(R.id.tv_widget_expense, "Rp 0")
+                    appWidgetManager.updateAppWidget(widgetId, views)
+                    return@launch
+                }
 
                 // Utilize the updated DAO query (WithSplits) for complex transaction structures
                 val transactionsWithSplits = db.transactionDao().getAllTransactionsWithSplits().firstOrNull() ?: emptyList()
 
                 val locale = Locale.forLanguageTag("id-ID")
-                val curSym = when(profile.currency) { "USD" -> "$"; "EUR" -> "€"; "JPY" -> "¥"; else -> "Rp" }
+                val curSym = when(profile.currency) { "USD", "AUD", "CAD", "SGD" -> "$"; "EUR" -> "€"; "GBP" -> "£"; "JPY", "CNY" -> "¥"; "CHF" -> "CHF"; else -> "Rp" }
 
                 val currentMonth = LocalDateTime.now().monthValue
                 val currentYear = LocalDateTime.now().year
@@ -112,7 +132,11 @@ class KumaWidgetProvider : AppWidgetProvider() {
 
                 // Apply the updated views to the homescreen widget
                 appWidgetManager.updateAppWidget(widgetId, views)
-            } catch (e: Exception) { e.printStackTrace() }
+            } catch (e: Exception) {
+                // Even on error, push what we have so widget doesn't stay on template
+                e.printStackTrace()
+                appWidgetManager.updateAppWidget(widgetId, views)
+            }
         }
     }
 }

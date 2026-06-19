@@ -149,10 +149,12 @@ fun SettingsScreen(
     var targetInput by remember { mutableStateOf(currentProfile.monthlyTarget.toString()) }
     var isTurningOn by remember { mutableStateOf(true) }
     var newName by remember { mutableStateOf(currentProfile.userName) }
+    var isRestoring by remember { mutableStateOf(false) }
 
     LaunchedEffect(mainActivity?.pendingRestoreJson) {
         val jsonToRestore = mainActivity?.pendingRestoreJson
         if (jsonToRestore != null) {
+            isRestoring = true
             scope.launch(Dispatchers.IO) {
                 try {
                     val root = JSONObject(jsonToRestore)
@@ -175,50 +177,52 @@ fun SettingsScreen(
                         isAmoledMode = pObj.optBoolean("isAmoledMode", false),
                         categoryIcons = pObj.optString("categoryIcons", "{}")
                     )
-                    dao.saveProfile(newProfile)
 
                     val txsArr = root.getJSONArray("transactions")
-                    dao.clearTransactions()
+                    val parsedTxs = mutableListOf<KumaTransaction>()
+                    val parsedSplits = mutableListOf<TransactionSplit>()
 
                     for (i in 0 until txsArr.length()) {
-                        try {
-                            val tObj = txsArr.getJSONObject(i)
-                            var safeTimestamp = tObj.optString("timestamp", "")
-                            if (safeTimestamp.isBlank()) {
-                                safeTimestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                            }
-
-                            val baseTx = KumaTransaction(
-                                name = tObj.optString("name", "Unknown"),
-                                date = tObj.optString("date", ""),
-                                amount = tObj.optString("amount", "0"),
-                                isIncome = tObj.optBoolean("isIncome", false),
-                                category = tObj.optString("category", "Others"),
-                                wallet = tObj.optString("wallet", "Cash"),
-                                timestamp = safeTimestamp,
-                                message = tObj.optString("message", "")
-                            )
-
-                            val splitsArr = tObj.optJSONArray("splits")
-                            val dbSplits = mutableListOf<TransactionSplit>()
-                            if (splitsArr != null) {
-                                for (j in 0 until splitsArr.length()) {
-                                    val sObj = splitsArr.getJSONObject(j)
-                                    dbSplits.add(
-                                        TransactionSplit(
-                                            transactionId = 0,
-                                            splitWallet = sObj.optString("w", "Cash"),
-                                            splitAmount = sObj.optLong("a", 0L)
-                                        )
-                                    )
-                                }
-                            }
-
-                            dao.insertFullTransaction(baseTx, dbSplits)
-
-                        } catch (e: Exception) {
-                            android.util.Log.e("RestoreDebug", "Gagal insert transaksi ke-$i: ${e.message}")
+                        val tObj = txsArr.getJSONObject(i)
+                        var safeTimestamp = tObj.optString("timestamp", "")
+                        if (safeTimestamp.isBlank()) {
+                            safeTimestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
                         }
+
+                        // Use the original ID if present, otherwise auto-generate
+                        val txId = tObj.optInt("id", i + 1)
+
+                        val baseTx = KumaTransaction(
+                            id = txId,
+                            name = tObj.optString("name", "Unknown"),
+                            date = tObj.optString("date", ""),
+                            amount = tObj.optString("amount", "0"),
+                            isIncome = tObj.optBoolean("isIncome", false),
+                            category = tObj.optString("category", "Others"),
+                            wallet = tObj.optString("wallet", "Cash"),
+                            timestamp = safeTimestamp,
+                            message = tObj.optString("message", "")
+                        )
+                        parsedTxs.add(baseTx)
+
+                        val splitsArr = tObj.optJSONArray("splits")
+                        if (splitsArr != null) {
+                            for (j in 0 until splitsArr.length()) {
+                                val sObj = splitsArr.getJSONObject(j)
+                                parsedSplits.add(
+                                    TransactionSplit(
+                                        transactionId = txId,
+                                        splitWallet = sObj.optString("w", "Cash"),
+                                        splitAmount = sObj.optLong("a", 0L)
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    // Atomic block to prevent corruption if user leaves or crashes
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                        dao.restoreDatabase(newProfile, parsedTxs, parsedSplits)
                     }
 
                     withContext(Dispatchers.Main) {
@@ -230,27 +234,31 @@ fun SettingsScreen(
                         Toast.makeText(context, "Error Restore: ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 } finally {
-                    mainActivity.pendingRestoreJson = null
+                    withContext(Dispatchers.Main) {
+                        isRestoring = false
+                        mainActivity.pendingRestoreJson = null
+                    }
                 }
             }
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp)
-            .padding(top = 24.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
-        Text(AppStr.set, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
-        Spacer(modifier = Modifier.height(24.dp))
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp)
+                .padding(top = 24.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Text(AppStr.set, fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = AppText())
+            Spacer(modifier = Modifier.height(24.dp))
 
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
                 SettingsGroupCard(
                     title = AppStr.accSec,
                     modifier = Modifier.fillMaxWidth(),
@@ -1233,8 +1241,27 @@ fun SettingsScreen(
         )
         Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding() + 24.dp))
     }
-}
 
+    if (isRestoring) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f))
+                .clickable(
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null,
+                    onClick = {}
+                ),
+            contentAlignment = androidx.compose.ui.Alignment.Center
+        ) {
+            androidx.compose.material3.CircularProgressIndicator(
+                color = AppPrimary(),
+                modifier = Modifier.size(64.dp)
+            )
+        }
+    }
+}
+}
 
 
 

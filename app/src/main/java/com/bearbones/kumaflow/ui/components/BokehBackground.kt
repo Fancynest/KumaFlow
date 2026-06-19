@@ -13,6 +13,10 @@ import kotlinx.coroutines.isActive
 import kotlin.math.cos
 import kotlin.math.sin
 
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.drawscope.translate
+
 @Composable
 fun BokehBackground(
     isPaused: Boolean = false,
@@ -40,57 +44,54 @@ fun BokehBackground(
         }
     }
 
-    Canvas(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        // Read animation time in the draw phase
-        val t = timeMillis / 10000f // Slow, ambient movement
+    Spacer(
+        modifier = Modifier
+            .fillMaxSize()
+            .drawWithCache {
+                val width = size.width
+                val height = size.height
 
-        // Read scroll offset directly in the draw phase to avoid recomposition (60 FPS Parallax)
-        val parallaxOffset = scrollOffsetProvider() * 0.15f
+                // Cache the brushes (centered at 0,0) so they aren't recreated 60 times a second
+                val brush1 = Brush.radialGradient(
+                    colors = listOf(color1, Color.Transparent),
+                    center = Offset.Zero,
+                    radius = width * 0.9f
+                )
+                val brush2 = Brush.radialGradient(
+                    colors = listOf(color2, Color.Transparent),
+                    center = Offset.Zero,
+                    radius = width * 1.0f
+                )
+                val brush3 = Brush.radialGradient(
+                    colors = listOf(color3, Color.Transparent),
+                    center = Offset.Zero,
+                    radius = width * 0.8f
+                )
 
-        val width = size.width
-        val height = size.height
+                onDrawBehind {
+                    // Read state in draw phase
+                    val t = timeMillis / 10000f
+                    val parallaxOffset = scrollOffsetProvider() * 0.15f
 
-        // Calculate dynamic centers based on time (Orbiting/Breathing) and parallax
-        val cx1 = width * 0.2f + cos(t) * (width * 0.1f)
-        val cy1 = height * 0.1f + sin(t) * (height * 0.1f) - parallaxOffset
+                    val cx1 = width * 0.2f + cos(t) * (width * 0.1f)
+                    val cy1 = height * 0.1f + sin(t) * (height * 0.1f) - parallaxOffset
 
-        val cx2 = width * 0.8f + cos(t + 2f) * (width * 0.15f)
-        val cy2 = height * 0.6f + sin(t + 2f) * (height * 0.15f) - (parallaxOffset * 0.8f) // Slightly slower parallax
+                    val cx2 = width * 0.8f + cos(t + 2f) * (width * 0.15f)
+                    val cy2 = height * 0.6f + sin(t + 2f) * (height * 0.15f) - (parallaxOffset * 0.8f)
 
-        val cx3 = width * 0.3f + sin(t + 4f) * (width * 0.1f)
-        val cy3 = height * 0.9f + cos(t + 4f) * (height * 0.1f) - (parallaxOffset * 1.2f)
+                    val cx3 = width * 0.3f + sin(t + 4f) * (width * 0.1f)
+                    val cy3 = height * 0.9f + cos(t + 4f) * (height * 0.1f) - (parallaxOffset * 1.2f)
 
-        // Draw animated and parallax-shifted circles
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(color1, Color.Transparent),
-                center = Offset(cx1, cy1),
-                radius = width * 0.9f
-            ),
-            radius = width * 0.9f,
-            center = Offset(cx1, cy1)
-        )
-
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(color2, Color.Transparent),
-                center = Offset(cx2, cy2),
-                radius = width * 1.0f
-            ),
-            radius = width * 1.0f,
-            center = Offset(cx2, cy2)
-        )
-
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(color3, Color.Transparent),
-                center = Offset(cx3, cy3),
-                radius = width * 0.8f
-            ),
-            radius = width * 0.8f,
-            center = Offset(cx3, cy3)
-        )
-    }
+                    translate(left = cx1, top = cy1) {
+                        drawCircle(brush = brush1, radius = width * 0.9f, center = Offset.Zero)
+                    }
+                    translate(left = cx2, top = cy2) {
+                        drawCircle(brush = brush2, radius = width * 1.0f, center = Offset.Zero)
+                    }
+                    translate(left = cx3, top = cy3) {
+                        drawCircle(brush = brush3, radius = width * 0.8f, center = Offset.Zero)
+                    }
+                }
+            }
+    )
 }

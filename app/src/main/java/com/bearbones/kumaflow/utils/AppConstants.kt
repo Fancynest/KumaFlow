@@ -34,7 +34,7 @@ object AppStr {
     val tar get() = "Target Global"
     val catBudget get() = if(isId) "Budget Kategori" else "Category Budget"
 
-    const val VERSION = "v5.0.0"
+    const val VERSION = "v5.0.1"
     val dat get() = "Data"
     val expPdf get() = if(isId) "Ekspor ke PDF" else "Export to PDF"
     val expCsv get() = if(isId) "Ekspor ke CSV" else "Export to CSV"

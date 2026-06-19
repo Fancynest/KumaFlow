@@ -61,6 +61,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import org.burnoutcrew.reorderable.*
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -116,6 +117,8 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.draw.shadow
 
 // --- DATA CLASSES & OBJECTS ---
 @Composable
@@ -180,7 +183,7 @@ fun HomeScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().padding(top = 24.dp).pointerInput(Unit) { detectTapGestures(onTap = { focusManager.clearFocus() }) },
+            modifier = Modifier.fillMaxSize().padding(top = 24.dp),
             contentPadding = PaddingValues(bottom = paddingValues.calculateBottomPadding() + 24.dp)
         ) {
             item {
@@ -227,7 +230,7 @@ fun HomeScreen(
                         Modifier
                             .fillMaxWidth()
                             .heightIn(min = 250.dp)
-                            .glassCard(32.dp, defaultSurfaceColor)
+                            .glassCard(32.dp, defaultSurfaceColor, useHaze = true)
                     }
 
                     Box(modifier = boxModifier) {
@@ -251,15 +254,33 @@ fun HomeScreen(
                                 AutoSizeText(text = "$balPref$curSym ${NumberFormat.getInstance(locale).format(abs(balance))}", modifier = Modifier.fillMaxWidth().blur(blurRadius), fontSize = 48.sp, fontWeight = FontWeight.Black, color = if (isPrideThemeActive) Color.White else AppText(), minimumFallbackSize = 24.sp)
                             }
                             Spacer(modifier = Modifier.height(20.dp))
-                            var walletData by remember(walletBalances) { mutableStateOf(walletBalances.toList()) }
+                            // CRITICAL: walletOrder must be a SINGLE STABLE instance that is NEVER recreated.
+                            // Using remember WITHOUT keys ensures the same SnapshotStateList persists across recompositions.
+                            // reorderState.onMove captures this reference — if we recreate it, onMove operates on a stale object.
+                            val walletOrder = remember {
+                                mutableStateListOf(*profile.wallets.split(",").filter { it.isNotBlank() }.toTypedArray())
+                            }
+                            // Only re-sync when wallets are structurally changed (added/removed from Settings),
+                            // NOT when merely reordered (which produces the same set).
+                            val currentWalletSet = remember(profile.wallets) {
+                                profile.wallets.split(",").filter { it.isNotBlank() }.toSet()
+                            }
+                            LaunchedEffect(currentWalletSet) {
+                                val displayedSet = walletOrder.toSet()
+                                if (displayedSet != currentWalletSet) {
+                                    walletOrder.clear()
+                                    walletOrder.addAll(profile.wallets.split(",").filter { it.isNotBlank() })
+                                }
+                            }
+
                             val reorderState = rememberReorderableLazyListState(
                                 onMove = { from, to ->
-                                    walletData = walletData.toMutableList().apply {
+                                    walletOrder.apply {
                                         add(to.index, removeAt(from.index))
                                     }
                                 },
                                 onDragEnd = { _, _ ->
-                                    onUpdateProfile(profile.copy(wallets = walletData.joinToString(",") { it.first }))
+                                    onUpdateProfile(profile.copy(wallets = walletOrder.joinToString(",")))
                                 }
                             )
 
@@ -269,36 +290,45 @@ fun HomeScreen(
                                 contentPadding = PaddingValues(horizontal = 32.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                items(walletData, { it.first }) { item ->
-                                    ReorderableItem(reorderState, key = item.first) { isDragging ->
-                                        val amt = item.second
-                                        val walletName = item.first
+                                items(walletOrder, { it }) { walletName ->
+                                    ReorderableItem(reorderState, key = walletName) { isDragging ->
+                                        val elevation by animateDpAsState(if (isDragging) 8.dp else 0.dp, label = "drag_elev")
+                                        val cardScale by androidx.compose.animation.core.animateFloatAsState(if (isDragging) 1.08f else 1f, label = "drag_scale")
+                                        val amt = walletBalances[walletName] ?: 0L
                                         val wBalPref = if (amt < 0) "- " else ""
                                         Column(
                                             modifier = Modifier
+                                                .zIndex(if (isDragging) 1f else 0f)
+                                                .scale(cardScale)
+                                                .shadow(elevation, RoundedCornerShape(16.dp))
                                                 .detectReorderAfterLongPress(reorderState)
                                                 .glassCard(16.dp, AppBg().copy(alpha = 0.2f))
                                                 .padding(horizontal = 16.dp, vertical = 10.dp)
                                         ) {
                                             Text(walletName, color = if (isPrideThemeActive) Color.White.copy(alpha = 0.8f) else AppText().copy(alpha = 0.8f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                            Text("$wBalPref$curSym ${NumberFormat.getInstance(locale).format(abs(amt))}", color = if (isPrideThemeActive) Color.White else AppText(), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.blur(blurRadius))
+                                            Text("$wBalPref$curSym ${NumberFormat.getInstance(locale).format(abs(amt))}", color = if (isPrideThemeActive) Color.White else AppText(), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.blur(blurRadius), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                         }
                                     }
                                 }
                             }
                             Spacer(modifier = Modifier.height(20.dp))
+                            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.ArrowUpward, null, tint = if (isPrideThemeActive) Color.White else AppGreen(), modifier = Modifier.size(20.dp))
+                                AutoSizeText(text = "${AppStr.inc} $curSym ${NumberFormat.getInstance(locale).format(income)}", modifier = Modifier.weight(1f).padding(start = 4.dp).blur(blurRadius), color = if (isPrideThemeActive) Color.White else AppText(), fontSize = 12.sp, fontWeight = FontWeight.Bold, minimumFallbackSize = 8.sp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(Icons.Default.ArrowDownward, null, tint = if (isPrideThemeActive) Color.White else AppRed(), modifier = Modifier.size(20.dp))
+                                AutoSizeText(text = "${AppStr.exp} $curSym ${NumberFormat.getInstance(locale).format(expenses)}", modifier = Modifier.weight(1f).padding(start = 4.dp).blur(blurRadius), color = if (isPrideThemeActive) Color.White else AppText(), fontSize = 12.sp, fontWeight = FontWeight.Bold, minimumFallbackSize = 8.sp)
+                            }
                         }
                     }
 
                     Spacer(modifier = Modifier.height(32.dp))
 
-                    Spacer(modifier = Modifier.height(32.dp))
-
                     OutlinedTextField(
-                        value = searchQuery, onValueChange = { searchQuery = it }, label = { Text(AppStr.searchTx) },
+                        value = searchQuery, onValueChange = { searchQuery = it }, placeholder = { Text(AppStr.searchTx) },
                         leadingIcon = { Icon(Icons.Default.Search, null, tint = AppText().copy(alpha = 0.5f)) },
                         trailingIcon = { if (searchQuery.isNotEmpty()) { IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Close, null, tint = AppText()) } } },
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).glassCard(16.dp, AppSurfaceVariant()), shape = RoundedCornerShape(16.dp), singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp).glassCard(16.dp, AppSurfaceVariant(), useHaze = true), shape = RoundedCornerShape(16.dp), singleLine = true,
                         colors = getGlassTextFieldColors()
                     )
 
@@ -351,7 +381,7 @@ fun HomeScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 24.dp)
-                                .glassCard(24.dp, AppSurfaceVariant())
+                                .glassCard(24.dp, AppSurfaceVariant(), useHaze = true)
                                 .padding(vertical = 8.dp)
                         ) {
                             val isExpanded = expandedDates.contains(date)

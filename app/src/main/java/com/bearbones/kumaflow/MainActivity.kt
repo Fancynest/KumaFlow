@@ -182,6 +182,9 @@ fun Modifier.glassmorphic(
             )
     } else {
         this
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(radius))
+            .background(AppSurfaceVariant())
+            .border(1.dp, if (LocalIsDark.current) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f), androidx.compose.foundation.shape.RoundedCornerShape(radius))
     }
 }
 
@@ -191,7 +194,7 @@ fun Modifier.glassCard(
     fallbackColor: Color,
     useHaze: Boolean = false,
     forceColor: Boolean = false
-): Modifier = composed {
+): Modifier {
     val glassColor = if (forceColor) {
         fallbackColor
     } else if (LocalIsDark.current) {
@@ -219,19 +222,26 @@ fun Modifier.glassCard(
         )
     }
 
-    if (LocalIsLiquidGlass.current) {
-        val hazeModifier = if (LocalIsPremiumGlassBlur.current) {
-            Modifier.hazeChild(
-                state = LocalHazeState.current,
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(radius),
-                style = HazeStyle(blurRadius = 64.dp, backgroundColor = Color.Transparent, tint = dev.chrisbanes.haze.HazeTint(glassColor))
-            )
+    return if (LocalIsLiquidGlass.current) {
+        val tintAlpha = if (LocalIsPremiumGlassBlur.current) 0.2f else 0.1f
+        val adjustedColor = glassColor.copy(alpha = (glassColor.alpha + tintAlpha).coerceAtMost(1f))
+        
+        val hazeModifier = if (useHaze) {
+            if (LocalIsPremiumGlassBlur.current) {
+                Modifier.hazeChild(
+                    state = LocalHazeState.current,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(radius),
+                    style = HazeStyle(blurRadius = 24.dp, backgroundColor = Color.Transparent, tint = dev.chrisbanes.haze.HazeTint(adjustedColor), noiseFactor = 0.15f)
+                )
+            } else {
+                Modifier.hazeChild(
+                    state = LocalHazeState.current,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(radius),
+                    style = HazeStyle(blurRadius = 8.dp, backgroundColor = Color.Transparent, tint = dev.chrisbanes.haze.HazeTint(adjustedColor), noiseFactor = 0.1f)
+                )
+            }
         } else {
-            Modifier.hazeChild(
-                state = LocalHazeState.current,
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(radius),
-                style = HazeStyle(blurRadius = 16.dp, backgroundColor = Color.Transparent, tint = dev.chrisbanes.haze.HazeTint(glassColor))
-            )
+            Modifier.background(adjustedColor)
         }
 
         this.clip(androidx.compose.foundation.shape.RoundedCornerShape(radius))
@@ -239,7 +249,10 @@ fun Modifier.glassCard(
             .background(shineGradient)
             .border(1.dp, borderGradient, androidx.compose.foundation.shape.RoundedCornerShape(radius))
     } else {
-        this.clip(androidx.compose.foundation.shape.RoundedCornerShape(radius)).background(fallbackColor)
+        this
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(radius))
+            .background(fallbackColor)
+            .border(1.dp, if (LocalIsDark.current) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.05f), androidx.compose.foundation.shape.RoundedCornerShape(radius))
     }
 }
 
@@ -367,11 +380,26 @@ fun MainScreen(
     var showBackupReminder by remember { mutableStateOf(false) }
     val totalTxCount = transactionListWithSplits.size
 
+    androidx.activity.compose.BackHandler(enabled = showBottomSheet || pagerState.currentPage != 0 || isSelectionMode) {
+        if (showBottomSheet) {
+            showBottomSheet = false
+        } else if (isSelectionMode) {
+            selectedTxs = emptySet()
+        } else if (pagerState.currentPage != 0) {
+            scope.launch { pagerState.animateScrollToPage(0) }
+            selectedItemIndex = 0
+        }
+    }
+
     Scaffold(
                 containerColor = Color.Transparent,
         floatingActionButton = {
-            val showFab = selectedItemIndex != 2 && (selectedItemIndex != 0 || isFabVisible) && !isSelectionMode
-            if (showFab) {
+            val showFab = selectedItemIndex != 2 && (selectedItemIndex != 0 || isFabVisible) && !isSelectionMode && !showBottomSheet
+            androidx.compose.animation.AnimatedVisibility(
+                visible = showFab,
+                enter = androidx.compose.animation.scaleIn(),
+                exit = androidx.compose.animation.scaleOut()
+            ) {
                 FloatingActionButton(
                     onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); transactionToEdit = null; showBottomSheet = true },
                     containerColor = if (LocalIsLiquidGlass.current) Color.Transparent else AppPrimary(),
@@ -382,7 +410,15 @@ fun MainScreen(
                 ) { Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(40.dp)) }
             }
         },
-        bottomBar = { CustomBottomNav(pagerState, haptic) { scope.launch { pagerState.animateScrollToPage(it) }; selectedItemIndex = it } }
+        bottomBar = {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !showBottomSheet,
+                enter = androidx.compose.animation.slideInVertically(initialOffsetY = { it }),
+                exit = androidx.compose.animation.slideOutVertically(targetOffsetY = { it })
+            ) {
+                CustomBottomNav(pagerState, haptic) { scope.launch { pagerState.animateScrollToPage(it) }; selectedItemIndex = it }
+            }
+        }
     ) { paddingValues ->
         Box(modifier = Modifier.padding(
             top = paddingValues.calculateTopPadding(),
@@ -624,6 +660,10 @@ fun TransactionBottomSheet(
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        Spacer(modifier = Modifier.height(16.dp))
+        Box(modifier = Modifier.width(40.dp).height(4.dp).clip(CircleShape).background(AppText().copy(alpha = 0.2f)))
+        Spacer(modifier = Modifier.height(24.dp))
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1395,6 +1435,10 @@ fun exportToDrive(context: Context, data: List<KumaTransaction>, profile: UserPr
 }
 
 fun backupAppToJSON(context: Context, profile: UserProfile, txsWithSplits: List<TransactionWithSplits>) {
+    if (txsWithSplits.isEmpty()) {
+        Toast.makeText(context, AppStr.noTx, Toast.LENGTH_SHORT).show()
+        return
+    }
     try {
         val root = JSONObject()
         root.put("backupVersion", 5)

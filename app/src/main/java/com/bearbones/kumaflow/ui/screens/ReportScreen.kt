@@ -292,7 +292,7 @@ fun ReportScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .glassCard(24.dp, AppSurfaceVariant())
+                            .glassCard(24.dp, AppSurfaceVariant(), useHaze = true)
                             .padding(vertical = 8.dp)
                     ) {
                         var index = 0

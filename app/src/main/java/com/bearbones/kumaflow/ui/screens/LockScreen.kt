@@ -350,7 +350,7 @@ class MainActivity : FragmentActivity() {
                     val isWrappedOpen = wrappedTarget != null
                     val isAppLocked = userProfile?.isAppLocked == true && !isAuthenticated
                     
-                    val isPaused = isOverlayOpen || isWrappedOpen || isAppLocked
+                    val isPaused = isOverlayOpen || isWrappedOpen || isAppLocked || homeListState.isScrollInProgress
                     val scrollOffsetProvider = remember(homeListState) { { homeListState.firstVisibleItemScrollOffset.toFloat() } }
 
                     Box(modifier = Modifier.fillMaxSize().background(AppBg())) {

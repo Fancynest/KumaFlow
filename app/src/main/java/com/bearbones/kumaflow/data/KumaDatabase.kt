@@ -120,6 +120,14 @@ interface TransactionDao {
 
     @Query("DELETE FROM transactions")
     suspend fun clearTransactions()
+
+    @Transaction
+    suspend fun restoreDatabase(profile: UserProfile, transactions: List<KumaTransaction>, splits: List<TransactionSplit>) {
+        saveProfile(profile)
+        clearTransactions()
+        insertTransactions(transactions)
+        insertSplits(splits)
+    }
 }
 
 val MIGRATION_12_13 = object : Migration(12, 13) {
@@ -186,7 +194,6 @@ abstract class KumaDatabase : RoomDatabase() {
                     "kuma_database"
                 )
                     .addMigrations(MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
-                    .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
                 instance
