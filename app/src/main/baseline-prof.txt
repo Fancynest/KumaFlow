@@ -1,4 +1,0 @@
-Lcom/bearbones/kumaflow/**;
-Landroidx/compose/**;
-Lkotlin/**;
-Lkotlinx/coroutines/**;
