@@ -38,23 +38,11 @@ KumaFlow recently underwent a major architectural refactor to adhere to **indust
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Download & Releases
 
-Want to run KumaFlow or explore the code? Here is how to get started:
+This repository serves as the official release hub for KumaFlow. You can download the latest APK versions directly from the **Releases** tab.
 
-### Prerequisites
-- **Android Studio** (Koala or newer recommended)
-- **Min SDK:** 27 (Android 8.1 Oreo)
-- **Target SDK:** 34
-
-### Installation
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/Fancynest/KumaFlow.git
-   ```
-2. Open the project in Android Studio.
-3. Sync Gradle and ensure all dependencies are downloaded.
-4. Run the app on your emulator or physical device.
+The source code for KumaFlow is proprietary and securely hosted in a private repository.
 
 ---
 
@@ -64,4 +52,4 @@ Crafted with passion by **Gabriel** 🐻.
 
 ## 📄 License
 
-This project is intended for educational and portfolio purposes. Feel free to clone, learn from the architecture, and explore the power of Jetpack Compose!
+KumaFlow is a closed-source proprietary application built from the ground up. All rights reserved.
